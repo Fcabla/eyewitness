@@ -1,3 +1,6 @@
-gradio>=5.0
 cairosvg
 pillow
+transformers
+accelerate
+torch
+spaces
