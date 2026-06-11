@@ -1,0 +1,100 @@
+"""Tier B testimony parser: MiniCPM5-1B slot-filling (the AI-load-bearing core).
+
+The 1B model translates MESSY natural witness language ("kind of a roundish
+face, caterpillar eyebrows, looked like he hadn't slept") into the strict
+attribute JSON the engine needs. This is exactly what small models are good
+at: constrained structured extraction over a closed vocabulary.
+
+Runs on ZeroGPU when deployed (@spaces.GPU); CPU locally for dev (a 1B parse
+is seconds-cheap). Every output is validated against VOCAB; invalid or missing
+slots fall back to the deterministic Tier A matcher — the game NEVER breaks.
+"""
+from __future__ import annotations
+
+import json
+import re
+import threading
+
+from .face import VOCAB
+from .parser import parse_testimony as _tier_a
+
+MODEL_ID = "openbmb/MiniCPM5-1B"
+
+try:  # ZeroGPU decorator when running in a HF Space
+    import spaces
+    _gpu = spaces.GPU(duration=15)
+except Exception:  # local dev
+    def _gpu(fn):
+        return fn
+
+_lock = threading.Lock()
+_model = None
+_tokenizer = None
+
+
+def _load():
+    global _model, _tokenizer
+    if _model is None:
+        with _lock:
+            if _model is None:
+                import torch
+                from transformers import AutoModelForCausalLM, AutoTokenizer
+                _tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True)
+                _model = AutoModelForCausalLM.from_pretrained(
+                    MODEL_ID, trust_remote_code=True,
+                    torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+                    device_map="cuda" if torch.cuda.is_available() else "cpu",
+                )
+    return _model, _tokenizer
+
+
+def _schema_block() -> str:
+    return "\n".join(f'  "{attr}": one of {opts} or null' for attr, opts in VOCAB.items())
+
+
+PROMPT = """You are a police sketch-artist assistant. A witness describes a suspect.
+Extract ONLY what the witness actually said into this exact JSON schema (null when not mentioned):
+{{
+{schema}
+}}
+Rules: output ONLY the JSON object. Use null for anything the witness did not mention.
+Map loose language to the closest allowed value (e.g. "caterpillar eyebrows"->"bushy",
+"hadn't slept"->"droopy" eyes, "gorro de lana"->"beanie"). The witness may speak English or Spanish.
+
+Witness testimony: "{testimony}"
+
+JSON:"""
+
+
+@_gpu
+def _generate(testimony: str) -> str:
+    model, tok = _load()
+    prompt = PROMPT.format(schema=_schema_block(), testimony=testimony.replace('"', "'"))
+    messages = [{"role": "user", "content": prompt}]
+    inputs = tok.apply_chat_template(messages, add_generation_prompt=True,
+                                     return_tensors="pt").to(model.device)
+    out = model.generate(inputs, max_new_tokens=220, do_sample=False,
+                         pad_token_id=tok.eos_token_id)
+    return tok.decode(out[0][inputs.shape[1]:], skip_special_tokens=True)
+
+
+def parse_testimony_model(testimony: str) -> dict[str, str | None]:
+    """Model first, Tier A as per-slot backstop. Validated against VOCAB."""
+    base = _tier_a(testimony)
+    if not testimony.strip():
+        return base
+    raw = _generate(testimony)
+    m = re.search(r"\{.*\}", raw, re.DOTALL)
+    if not m:
+        return base
+    try:
+        data = json.loads(m.group(0))
+    except json.JSONDecodeError:
+        return base
+    out: dict[str, str | None] = {}
+    for attr in VOCAB:
+        v = data.get(attr)
+        if isinstance(v, str):
+            v = v.strip().lower().replace(" ", "_")
+        out[attr] = v if v in VOCAB[attr] else base.get(attr)
+    return out
