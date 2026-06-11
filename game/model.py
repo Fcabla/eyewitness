@@ -18,7 +18,10 @@ import threading
 from .face import VOCAB
 from .parser import parse_testimony as _tier_a
 
-MODEL_ID = "openbmb/MiniCPM5-1B"
+import os
+
+# Swapped to our published fine-tune once training completes (Well-Tuned badge).
+MODEL_ID = os.environ.get("EYEWITNESS_MODEL_ID", "openbmb/MiniCPM5-1B")
 
 try:  # ZeroGPU decorator when running in a HF Space
     import spaces
@@ -33,11 +36,17 @@ _tokenizer = None
 
 
 def model_enabled() -> bool:
-    """Tier B only where it's fast: CUDA (ZeroGPU Space) or explicit override.
+    """Tier B only where it's fast: a ZeroGPU Space, real CUDA, or override.
     On CPU a 1B parse takes ~30-50s — Tier A handles local dev instantly."""
     import os
     if os.environ.get("EYEWITNESS_FORCE_MODEL") == "1":
         return True
+    if os.environ.get("SPACES_ZERO_GPU"):  # ZeroGPU Space (CUDA is lazy there)
+        try:
+            import spaces  # noqa: F401
+            return True
+        except Exception:
+            pass
     try:
         import torch
         return torch.cuda.is_available()
