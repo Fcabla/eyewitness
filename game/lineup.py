@@ -1,4 +1,4 @@
-"""Lineup builder — the signature mechanic.
+"""Lineup builder.
 
 Distractors are derived from the PLAYER'S OWN testimony errors:
 - Attributes you got WRONG become shared between culprit and distractors

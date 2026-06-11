@@ -5,8 +5,8 @@ Game loop: case intro -> timed glimpse -> testimony -> sketch reveal -> lineup
 grow the lineup; from INSPECTOR the culprit changes one feature before the
 lineup ("he's been to a barber since").
 
-UI architecture: a single state-driven @gr.render stage (Gradio 6 native).
-No Column-visibility toggling — empirically fragile in Gradio 6.
+UI architecture: a single state-driven @gr.render stage. Column-visibility
+toggling desyncs in Gradio 6 once demo.load touches it (see FIELD_NOTES.md).
 """
 from __future__ import annotations
 
@@ -156,16 +156,25 @@ def next_case(s: dict) -> dict:
 
 # ------------------------------------------------------------------ UI
 CSS = """
+@import url('https://fonts.googleapis.com/css2?family=Special+Elite&display=swap');
 :root { --paper:#f4efe4; --ink:#2b2a28; --red:#a33327; --tape:#c9a227; }
-.gradio-container { background:#191713 !important; font-family:'Courier New',monospace !important; }
+.gradio-container { background:#191713 !important; font-family:'Courier New',monospace !important;
+  background-image: radial-gradient(ellipse at 50% -10%, rgba(201,162,39,0.07) 0%, transparent 55%) !important; }
 #ew-root { max-width: 900px; margin: 0 auto; }
-.ew-header { text-align:center; color:var(--paper); letter-spacing:6px; font-size:30px; padding:10px 0 0; }
+.ew-header { text-align:center; color:var(--paper); letter-spacing:7px; font-size:34px; padding:12px 0 0;
+  font-family:'Special Elite','Courier New',monospace; text-shadow: 0 2px 0 rgba(0,0,0,.6); }
 .ew-sub { text-align:center; color:#8d8678; font-size:12px; letter-spacing:2px; margin-bottom:8px; }
 .ew-rank { font-family:monospace; color:var(--tape); text-align:center; letter-spacing:2px; font-size:13px; }
 .ew-card { background:var(--paper) !important; border-radius:4px; padding:22px 26px !important; color:var(--ink);
            box-shadow: 0 10px 40px rgba(0,0,0,.5); }
 .ew-card * { color: var(--ink); }
 .ew-glimpse { position:relative; width:320px; margin:0 auto; }
+.ew-glimpse::before { content:'● REC'; position:absolute; top:8px; left:10px; z-index:3;
+  color:#e03b2f; font-size:12px; letter-spacing:2px; animation: ew-blink 1.1s step-end infinite; }
+.ew-glimpse::after { content:''; position:absolute; inset:0 0 13px 0; z-index:2; pointer-events:none;
+  box-shadow: inset 0 0 60px rgba(0,0,0,.55);
+  background: repeating-linear-gradient(0deg, transparent 0 3px, rgba(0,0,0,0.06) 3px 4px); }
+@keyframes ew-blink { 50% { opacity: 0; } }
 .ew-glimpse img { width:100%; filter: blur(0); }
 @keyframes ew-blurout { to { filter: blur(30px) contrast(0.4); } }
 .ew-static { position:absolute; inset:0 0 13px 0; display:flex; align-items:center; justify-content:center;
@@ -182,7 +191,10 @@ CSS = """
 .ew-hit td { color:#1d6b2f !important; } .ew-miss td { color:var(--red) !important; } .ew-silent td { color:#8d8678 !important; }
 .ew-verdict { text-align:center; }
 .ew-stamp { display:inline-block; border:4px solid var(--red); color:var(--red); padding:6px 22px;
-  font-size:26px; letter-spacing:4px; transform:rotate(-6deg); margin:6px 0 10px; }
+  font-size:26px; letter-spacing:4px; transform:rotate(-6deg) scale(1); margin:6px 0 10px;
+  font-family:'Special Elite','Courier New',monospace;
+  animation: ew-stamp-in .28s cubic-bezier(.2,2.2,.5,1) both; }
+@keyframes ew-stamp-in { from { opacity:0; transform: rotate(-6deg) scale(2.4); } }
 .ew-good .ew-stamp { border-color:#1d6b2f; color:#1d6b2f; }
 .ew-quote { font-style:italic; margin-bottom:12px; }
 .ew-pair { display:flex; gap:18px; justify-content:center; }
@@ -249,10 +261,13 @@ with gr.Blocks(title="EYEWITNESS") as demo:
                                 gr.Markdown(f"**⚠ {case.disguise_line}**")
                         with gr.Column(scale=2):
                             gr.Markdown("### THE LINEUP — click the culprit")
+                            n = len(s["lineup"])
+                            rows = -(-n // 4)  # ceil
                             gal = gr.Gallery(
                                 value=[(face_png(f, width=240), f"Nº {i + 1}")
                                        for i, f in enumerate(s["lineup"])],
-                                columns=4, height=320, allow_preview=False, label="")
+                                columns=4, rows=rows, height=rows * 330,
+                                allow_preview=False, label="")
 
                             def _pick(st: dict, evt: gr.SelectData):
                                 return pick_suspect(st, evt.index)

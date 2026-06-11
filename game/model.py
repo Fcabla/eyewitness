@@ -20,7 +20,7 @@ from .parser import parse_testimony as _tier_a
 
 import os
 
-# Swapped to our published fine-tune once training completes (Well-Tuned badge).
+# Overridable so the Space can point at the published fine-tune.
 MODEL_ID = os.environ.get("EYEWITNESS_MODEL_ID", "openbmb/MiniCPM5-1B")
 
 try:  # ZeroGPU decorator when running in a HF Space

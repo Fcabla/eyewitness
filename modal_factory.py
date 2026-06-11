@@ -89,8 +89,8 @@ def build_voice_bank() -> dict[str, list[bytes]]:
 
     tts = VoxCPM.from_pretrained("openbmb/VoxCPM2")
 
-    sr = tts.tts_model.sample_rate  # 48 kHz — writing at the wrong rate slows
-    # the anchor 3x and garbles every line cloned from it (hard-won lesson)
+    sr = tts.tts_model.sample_rate  # 48 kHz; a wrong rate here slows the anchor
+    # and garbles every line cloned from it
     anchor_text = "Okay, okay. It was me. Take me in."
     anchor = tts.generate(text=anchor_text)
     anchor_path = "/tmp/anchor.wav"
