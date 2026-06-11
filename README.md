@@ -19,7 +19,7 @@ tags:
   - off-the-grid
   - llama-champion
   - game
-short_description: You saw the thief for 3 seconds. Your memory is the only witness.
+short_description: You saw the thief for 3s. Can your memory convict him?
 ---
 
 # 👁️ EYEWITNESS
