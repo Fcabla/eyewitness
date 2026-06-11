@@ -32,6 +32,19 @@ _model = None
 _tokenizer = None
 
 
+def model_enabled() -> bool:
+    """Tier B only where it's fast: CUDA (ZeroGPU Space) or explicit override.
+    On CPU a 1B parse takes ~30-50s — Tier A handles local dev instantly."""
+    import os
+    if os.environ.get("EYEWITNESS_FORCE_MODEL") == "1":
+        return True
+    try:
+        import torch
+        return torch.cuda.is_available()
+    except Exception:
+        return False
+
+
 def _load():
     global _model, _tokenizer
     if _model is None:

@@ -32,7 +32,7 @@ SYNONYMS: dict[str, dict[str, list[str]]] = {
         "bald": ["bald", "no hair", "shaved head", "calvo", "sin pelo", "rapado al cero"],
         "buzz": ["buzz cut", "buzzcut", "crew cut", "very short hair", "rapado", "pelo al uno"],
         "short_messy": ["messy hair", "short hair", "bedhead", "pelo corto", "despeinado", "pelo revuelto"],
-        "slick_back": ["slicked back", "slick back", "gelled", "combed back", "engominado", "peinado hacia atras", "repeinado"],
+        "slick_back": ["slicked back", "slick back", "slicked his hair back", "hair back like a banker", "gelled", "combed back", "engominado", "peinado hacia atras", "repeinado", "pelo hacia atras"],
         "curly": ["curly", "curls", "afro", "rizado", "rizos", "pelo chino"],
         "long": ["long hair", "hair down", "melena", "pelo largo"],
         "ponytail": ["ponytail", "pony tail", "coleta"],
@@ -58,7 +58,7 @@ SYNONYMS: dict[str, dict[str, list[str]]] = {
         "normal": ["normal eyes", "ojos normales"],
     },
     "glasses": {
-        "round": ["round glasses", "circular glasses", "gafas redondas", "lentes redondos"],
+        "round": ["round glasses", "circular glasses", "grandpa glasses", "gafas redondas", "lentes redondos", "gafas de abuelo", "gafas de esas redondas"],
         "square": ["square glasses", "rectangular glasses", "gafas cuadradas", "gafas de pasta"],
         "sunglasses": ["sunglasses", "shades", "dark glasses", "gafas de sol", "gafas oscuras", "lentes oscuros"],
         "none": ["no glasses", "sin gafas"],
@@ -80,7 +80,7 @@ SYNONYMS: dict[str, dict[str, list[str]]] = {
         "stubble": ["stubble", "five o'clock shadow", "unshaven", "scruffy", "barba de tres dias", "sin afeitar", "barba incipiente"],
         "mustache": ["mustache", "moustache", "bigote", "mostacho"],
         "goatee": ["goatee", "perilla", "chivo"],
-        "full_beard": ["full beard", "big beard", "thick beard", "bearded", "barba", "barbudo", "barba cerrada"],
+        "full_beard": ["full beard", "big beard", "huge beard", "thick beard", "bearded", "barba", "barbudo", "barba cerrada", "barbaza"],
     },
     "hat": {
         "beanie": ["beanie", "wool hat", "knit hat", "gorro", "gorro de lana"],

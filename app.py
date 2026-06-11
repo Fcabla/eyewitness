@@ -35,8 +35,8 @@ def verdict_voice(correct: bool) -> str | None:
     return str(_r.choice(files)) if files else None
 
 try:  # Tier B (deployed): MiniCPM5-1B slot-filler. Falls back to Tier A locally.
-    from game.model import parse_testimony_model  # noqa: F401
-    HAS_MODEL = True
+    from game.model import parse_testimony_model, model_enabled
+    HAS_MODEL = model_enabled()
 except Exception:
     HAS_MODEL = False
 
