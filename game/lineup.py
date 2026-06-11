@@ -43,8 +43,10 @@ def build_lineup(
         # 2) vary 2-3 of the MISSED salient attributes
         for attr in rng.sample(missed, k=min(len(missed), rng.randint(2, 3))):
             d[attr] = rng.choice([v for v in VOCAB[attr] if v != d[attr]])
-        # 3) sometimes vary a CORRECT one too, so right answers still need looking
-        if correct and rng.random() < 0.35:
+        # 3) correct memory must PRUNE the lineup: most distractors break at
+        #    least one attribute the witness nailed (tuned via fairness sim —
+        #    without this, good testimony was useless: 2% identifiable)
+        if correct and rng.random() < 0.72:
             attr = rng.choice(sorted(correct))
             d[attr] = rng.choice([v for v in VOCAB[attr] if v != d[attr]])
         # never identical to the truth
