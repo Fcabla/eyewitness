@@ -49,7 +49,7 @@ transparency.
 
 ## Team
 
-- HF: `<TODO-FERNANDO-HF-USERNAME>`
+- HF: [`Fcabla`](https://huggingface.co/Fcabla)
 
 ## Links
 
