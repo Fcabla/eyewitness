@@ -15,11 +15,24 @@ import random
 
 import gradio as gr
 
+from pathlib import Path
+
 from game.casegen import make_case, Case, RANKS
 from game.face import render_face_svg, FaceSpec
 from game.lineup import build_lineup
 from game.parser import parse_testimony
+from game.poster import make_wanted_poster
 from game.scoring import grade_testimony, detective_rating
+
+ASSETS = Path(__file__).resolve().parent / "assets"
+
+
+def verdict_voice(correct: bool) -> str | None:
+    """Pre-rendered VoxCPM2 line (Modal voice bank) if present — zero live GPU."""
+    import random as _r
+    kind = "caught" if correct else "escaped"
+    files = sorted(ASSETS.glob(f"voice_{kind}_*.wav")) if ASSETS.exists() else []
+    return str(_r.choice(files)) if files else None
 
 try:  # Tier B (deployed): MiniCPM5-1B slot-filler. Falls back to Tier A locally.
     from game.model import parse_testimony_model  # noqa: F401
@@ -268,6 +281,15 @@ with gr.Blocks(title="EYEWITNESS") as demo:
   <div class="ew-line">{line} · Memory accuracy: <b>{report.weighted_pct}%</b></div>
 </div>
 {report_table_html(report)}""")
+                    voice = verdict_voice(correct)
+                    if voice:
+                        gr.Audio(value=voice, autoplay=True, show_label=False,
+                                 show_download_button=False, container=False)
+                    poster = make_wanted_poster(
+                        sketch_from_testimony(s["described"]), case.culprit, correct,
+                        report.weighted_pct, case.crime_name, case.rank)
+                    with gr.Accordion("📜 YOUR WANTED POSTER — download & dare a friend", open=False):
+                        gr.Image(value=poster, show_label=False, height=420)
                     if case.case_no < len(RANKS):
                         nxt = RANKS[case.case_no][0]
                         b = gr.Button(f"NEXT CASE → RANK: {nxt}", variant="primary")
