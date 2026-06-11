@@ -302,8 +302,10 @@ with gr.Blocks(title="EYEWITNESS") as demo:
 {report_table_html(report)}""")
                     voice = verdict_voice(correct)
                     if voice:
+                        # minimal kwargs: the Space's gradio build rejects newer
+                        # Audio options like show_download_button
                         gr.Audio(value=voice, autoplay=True, show_label=False,
-                                 show_download_button=False, container=False)
+                                 container=False)
                     poster = make_wanted_poster(
                         sketch_from_testimony(s["described"]), case.culprit, correct,
                         report.weighted_pct, case.crime_name, case.rank)
