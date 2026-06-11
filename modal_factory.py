@@ -77,24 +77,46 @@ def build_case_bank(n_cases: int = 48) -> list[dict]:
 
 @app.function(image=voice_image, gpu="A10G", timeout=1800)
 def build_voice_bank() -> dict[str, list[bytes]]:
-    """Pre-render the culprit's verdict lines with VoxCPM2 (smug, theatrical)."""
+    """Pre-render the culprit's verdict lines with VoxCPM2.
+
+    Voice consistency trick: render an anchor line with the default voice once,
+    then self-clone it (prompt_wav + its transcript) for every other line so the
+    culprit keeps ONE voice across the whole bank."""
     import io
 
     import soundfile as sf
     from voxcpm import VoxCPM
 
     tts = VoxCPM.from_pretrained("openbmb/VoxCPM2")
+
+    anchor_text = "Okay, okay. It was me. Take me in."
+    anchor = tts.generate(text=anchor_text)
+    anchor_path = "/tmp/anchor.wav"
+    sf.write(anchor_path, anchor, 16000)
+
+    def render(line: str):
+        if line == anchor_text:
+            return anchor
+        return tts.generate(text=line, prompt_wav_path=anchor_path, prompt_text=anchor_text)
+
     rendered: dict[str, list[bytes]] = {"caught": [], "escaped": []}
     for kind, lines in VERDICT_LINES.items():
         for line in lines:
-            wav = tts.generate(
-                text=line,
-                prompt_text="(smug, nasal, theatrical, slightly out of breath)",
-            )
+            wav = render(line)
             buf = io.BytesIO()
             sf.write(buf, wav, 16000, format="WAV")
             rendered[kind].append(buf.getvalue())
     return rendered
+
+
+@app.local_entrypoint()
+def voices_only():
+    voices = build_voice_bank.remote()
+    for kind, blobs in voices.items():
+        for i, blob in enumerate(blobs):
+            with open(f"assets/voice_{kind}_{i}.wav", "wb") as f:
+                f.write(blob)
+    print("voice bank complete -> assets/")
 
 
 @app.local_entrypoint()
