@@ -27,12 +27,23 @@ from game.scoring import grade_testimony, detective_rating
 ASSETS = Path(__file__).resolve().parent / "assets"
 
 
-def verdict_voice(correct: bool) -> str | None:
-    """Pre-rendered VoxCPM2 line (Modal voice bank) if present — zero live GPU."""
+def verdict_voice(correct: bool) -> tuple[int, "np.ndarray"] | None:
+    """Pre-rendered VoxCPM2 line (Modal voice bank) if present — zero live GPU.
+
+    Returned in-memory as (sample_rate, samples): gr.Audio file paths outside
+    Gradio's allowed dirs raise InvalidPathError and kill the whole render."""
     import random as _r
+    import wave
+
+    import numpy as np
+
     kind = "caught" if correct else "escaped"
     files = sorted(ASSETS.glob(f"voice_{kind}_*.wav")) if ASSETS.exists() else []
-    return str(_r.choice(files)) if files else None
+    if not files:
+        return None
+    with wave.open(str(_r.choice(files))) as w:
+        frames = w.readframes(w.getnframes())
+        return w.getframerate(), np.frombuffer(frames, dtype=np.int16)
 
 try:  # Tier B (deployed): MiniCPM5-1B slot-filler. Falls back to Tier A locally.
     from game.model import parse_testimony_model, model_enabled
