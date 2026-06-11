@@ -123,5 +123,8 @@ def parse_testimony_model(testimony: str) -> dict[str, str | None]:
         v = data.get(attr)
         if isinstance(v, str):
             v = v.strip().lower().replace(" ", "_")
-        out[attr] = v if v in VOCAB[attr] else base.get(attr)
+        # Tier A is literal-match (high precision): where it spoke, it wins.
+        # The model fills the silence (messy/indirect phrasings) — this also
+        # caps model hallucinations to attributes Tier A had no opinion on.
+        out[attr] = base.get(attr) or (v if v in VOCAB[attr] else None)
     return out
