@@ -46,10 +46,16 @@ def verdict_voice(correct: bool) -> tuple[int, "np.ndarray"] | None:
         return w.getframerate(), np.frombuffer(frames, dtype=np.int16)
 
 try:  # Tier B (deployed): MiniCPM5-1B slot-filler. Falls back to Tier A locally.
-    from game.model import parse_testimony_model, model_enabled
+    from game.model import parse_testimony_model, model_enabled, culprit_taunt
     HAS_MODEL = model_enabled()
 except Exception:
     HAS_MODEL = False
+
+try:  # live VoxCPM2 verdict voice (anchored per suspect); bank is the fallback
+    from game.voice import speak as live_speak
+except Exception:
+    def live_speak(line, seed):
+        return None
 
 
 # ------------------------------------------------------------------ helpers
@@ -285,8 +291,12 @@ with gr.Blocks(title="EYEWITNESS") as demo:
                 truth_img = svg_uri(render_face_svg(case.culprit, width=240))
                 picked_img = svg_uri(render_face_svg(s["lineup"][s["picked"]], width=240))
                 head = "ARREST CONFIRMED" if correct else "WRONG ARREST"
-                quote = ("“Okay, okay. It was me. Take me in.”" if correct
-                         else "“Wrong guy. I walked RIGHT past you. Twice.”")
+                # live, personalized taunt from the witness's actual mistakes;
+                # canned quote is the fallback at every step of the cascade
+                taunt = culprit_taunt(report.rows, correct) if HAS_MODEL else None
+                quote = (f"“{taunt}”" if taunt else
+                         ("“Okay, okay. It was me. Take me in.”" if correct
+                          else "“Wrong guy. I walked RIGHT past you. Twice.”"))
                 with gr.Column(elem_classes=["ew-card"]):
                     gr.HTML(f"""
 <div class="ew-verdict {'ew-good' if correct else 'ew-bad'}">
@@ -300,7 +310,8 @@ with gr.Blocks(title="EYEWITNESS") as demo:
   <div class="ew-line">{line} · Memory accuracy: <b>{report.weighted_pct}%</b></div>
 </div>
 {report_table_html(report)}""")
-                    voice = verdict_voice(correct)
+                    voice = (live_speak(taunt, case.seed) if taunt else None) \
+                        or verdict_voice(correct)
                     if voice:
                         # minimal kwargs: the Space's gradio build rejects newer
                         # Audio options like show_download_button

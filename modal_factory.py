@@ -158,3 +158,42 @@ def probe_voice() -> dict:
 @app.local_entrypoint()
 def probe():
     print(probe_voice.remote())
+
+
+VOICE_ANCHORS = {
+    # designed once, cloned at runtime so each suspect keeps a consistent voice
+    "gravel": "Deep, gravelly male voice, slow and self-satisfied. Okay, okay. It was me. Take me in.",
+    "sharp": "Sharp, fast female voice, mocking and theatrical. Okay, okay. It was me. Take me in.",
+    "nasal": "Thin, nasal male voice, whiny and indignant. Okay, okay. It was me. Take me in.",
+}
+ANCHOR_TEXT = "Okay, okay. It was me. Take me in."
+
+
+@app.function(image=voice_image, gpu="A10G", timeout=1200)
+def build_voice_anchors() -> dict[str, bytes]:
+    """Three reference voices for runtime cloning (voice/face match)."""
+    import io
+
+    import soundfile as sf
+    from voxcpm import VoxCPM
+
+    tts = VoxCPM.from_pretrained("openbmb/VoxCPM2")
+    sr = tts.tts_model.sample_rate
+    out: dict[str, bytes] = {}
+    for name, styled_text in VOICE_ANCHORS.items():
+        # best-of-3: keep the longest render that stays in budget (style adherence varies)
+        takes = [tts.generate(text=styled_text) for _ in range(3)]
+        takes = [t for t in takes if len(t) / sr < 9.0] or takes
+        wav = max(takes, key=len)
+        buf = io.BytesIO()
+        sf.write(buf, wav, sr, format="WAV")
+        out[name] = buf.getvalue()
+    return out
+
+
+@app.local_entrypoint()
+def anchors_only():
+    for name, blob in build_voice_anchors.remote().items():
+        with open(f"assets/anchor_{name}.wav", "wb") as f:
+            f.write(blob)
+    print("anchors complete -> assets/")
