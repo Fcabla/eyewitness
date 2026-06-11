@@ -105,6 +105,13 @@ FILLERS_ES = ["creo", "me parece", "juraria que", "no se,", "o sea", "si no recu
 CONNECT = [", ", ", and ", ". ", ", y ", " — ", "... "]
 
 
+# keep in lockstep with game/parser.py SYNONYMS — drift here means the model
+# trains on phrasings the live app never produces, and vice versa
+assert set(PHRASES) == set(VOCAB), "PHRASES attributes drifted from VOCAB"
+for _attr, _values in PHRASES.items():
+    assert set(_values) <= set(VOCAB[_attr]) | {"none"}, f"PHRASES[{_attr}] has values outside VOCAB"
+
+
 def spec_to_testimony(spec: FaceSpec, rng: random.Random) -> tuple[str, dict]:
     """Pick 3-7 attributes, phrase them noisily, return (text, partial truth dict)."""
     attrs = [a for a in VOCAB if PHRASES[a].get(getattr(spec, a))]

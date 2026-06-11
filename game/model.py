@@ -96,7 +96,9 @@ JSON:"""
 @_gpu
 def _generate(testimony: str) -> str:
     model, tok = _load()
-    prompt = PROMPT.format(schema=_schema_block(), testimony=testimony.replace('"', "'"))
+    # json.dumps gives fully-escaped quoting; bare replace() left injectable quotes
+    safe = json.dumps(testimony, ensure_ascii=False)[1:-1]
+    prompt = PROMPT.format(schema=_schema_block(), testimony=safe)
     messages = [{"role": "user", "content": prompt}]
     text = tok.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     enc = tok(text, return_tensors="pt").to(model.device)

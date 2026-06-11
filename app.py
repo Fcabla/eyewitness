@@ -46,16 +46,7 @@ def svg_uri(svg: str) -> str:
     return "data:image/svg+xml;base64," + base64.b64encode(svg.encode()).decode()
 
 
-def face_png(spec: FaceSpec, width: int = 300) -> "Image.Image":
-    """Rasterize a face for components that need real images (gr.Gallery)."""
-    import io
-
-    import cairosvg
-    from PIL import Image
-
-    png = cairosvg.svg2png(bytestring=render_face_svg(spec, width=width).encode(),
-                           output_width=width)
-    return Image.open(io.BytesIO(png)).convert("RGB")
+from game.render import face_image as face_png  # gr.Gallery needs PIL, not data-URIs
 
 
 def glimpse_html(case: Case) -> str:
@@ -151,6 +142,8 @@ def next_case(s: dict) -> dict:
     s["case_no"] = min(s["case_no"] + 1, len(RANKS))
     s["case"] = make_case(s["case_no"])
     s["screen"] = "intro"
+    for stale in ("described", "lineup", "culprit_idx", "picked", "correct"):
+        s.pop(stale, None)
     return s
 
 

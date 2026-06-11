@@ -281,11 +281,3 @@ def render_face_svg(spec: FaceSpec, width: int = 300, paper: bool = True, seed_j
     return svg
 
 
-def render_unknown_svg(width: int = 300) -> str:
-    """Placeholder silhouette for un-described attributes / mystery faces."""
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 360" width="{width}">
-<rect width="300" height="360" fill="{PAPER}"/>
-<path d="M118,250 L114,300 C112,318 100,322 84,330 L216,330 C200,322 188,318 186,300 L182,250 M150,68 C108,68 84,104 84,160 C84,216 112,262 150,262 C188,262 216,216 216,160 C216,104 192,68 150,68"
- fill="#d8d0bd" stroke="#9a9284" stroke-width="3" stroke-dasharray="7 6"/>
-<text x="150" y="180" text-anchor="middle" font-family="monospace" font-size="64" fill="#9a9284">?</text>
-</svg>'''

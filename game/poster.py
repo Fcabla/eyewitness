@@ -5,24 +5,16 @@ downloads and dares friends with. Pure PIL — zero GPU, zero model.
 """
 from __future__ import annotations
 
-import io
-
-import cairosvg
 from PIL import Image, ImageDraw, ImageFont
 
-from .face import FaceSpec, render_face_svg
+from .face import FaceSpec
+from .render import face_image as _face_img
 
 PAPER = (244, 239, 228)
 INK = (43, 42, 40)
 RED = (163, 51, 39)
 GREEN = (29, 107, 47)
 TAPE = (201, 162, 39)
-
-
-def _face_img(spec: FaceSpec, width: int) -> Image.Image:
-    png = cairosvg.svg2png(bytestring=render_face_svg(spec, width=width).encode(),
-                           output_width=width)
-    return Image.open(io.BytesIO(png)).convert("RGB")
 
 
 def _font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
