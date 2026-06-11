@@ -58,8 +58,13 @@ Extract ONLY what the witness actually said into this exact JSON schema (null wh
 {schema}
 }}
 Rules: output ONLY the JSON object. Use null for anything the witness did not mention.
-Map loose language to the closest allowed value (e.g. "caterpillar eyebrows"->"bushy",
-"hadn't slept"->"droopy" eyes, "gorro de lana"->"beanie"). The witness may speak English or Spanish.
+Map loose language to the closest allowed value, even when words are split apart
+(e.g. "caterpillar eyebrows"->brows "bushy"; "hadn't slept"->eyes "droopy";
+"gorro de lana"->hat "beanie"; "slicked his hair back"->hair_style "slick_back";
+"gafas de esas de abuelo, redondas"->glasses "round"). English or Spanish.
+
+Example testimony: "uno con sombrero, la nariz enorme, y el pelo todo engominado hacia atras"
+Example JSON: {{"face_shape": null, "skin": null, "hair_style": "slick_back", "hair_color": null, "brows": null, "eyes": null, "glasses": null, "nose": "big", "mouth": null, "facial_hair": null, "hat": "fedora", "extra": null}}
 
 Witness testimony: "{testimony}"
 
