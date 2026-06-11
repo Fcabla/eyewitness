@@ -52,16 +52,16 @@ def build_case_bank(n_cases: int = 48) -> list[dict]:
                            filename="MiniCPM5-1B-Q4_K_M.gguf")
     llm = Llama(model_path=gguf, n_ctx=2048, verbose=False)
 
-    prompt_tpl = (
+    prompt_head = (
         "Write ONE short, funny, family-friendly petty-crime headline and a one-sentence "
         "description for a comedy detective game. Format strictly as JSON: "
         '{"name": "the <Something> <Job/Heist/Affair/Caper>", "blurb": "<one sentence, third person>"}'
-        "\nTheme hint: {hint}\nJSON:"
+        "\nTheme hint: "
     )
     hints = ["food", "animals", "music", "transport", "sports", "art", "weather", "technology"]
     bank = []
     for i in range(n_cases):
-        out = llm(prompt_tpl.format(hint=hints[i % len(hints)]),
+        out = llm(prompt_head + hints[i % len(hints)] + "\nJSON:",
                   max_tokens=120, temperature=0.9, stop=["\n\n"])
         text = out["choices"][0]["text"]
         try:
