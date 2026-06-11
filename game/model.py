@@ -25,7 +25,7 @@ MODEL_ID = os.environ.get("EYEWITNESS_MODEL_ID", "openbmb/MiniCPM5-1B")
 
 try:  # ZeroGPU decorator when running in a HF Space
     import spaces
-    _gpu = spaces.GPU(duration=15)
+    _gpu = spaces.GPU(duration=60)  # cold model load + generation; billed by use
 except Exception:  # local dev
     def _gpu(fn):
         return fn
@@ -103,7 +103,11 @@ def _generate(testimony: str) -> str:
     safe = json.dumps(testimony, ensure_ascii=False)[1:-1]
     prompt = PROMPT.format(schema=_schema_block(), testimony=safe)
     messages = [{"role": "user", "content": prompt}]
-    text = tok.apply_chat_template(messages, tokenize=False, add_generation_prompt=True, enable_thinking=False)
+    try:
+        text = tok.apply_chat_template(messages, tokenize=False,
+                                       add_generation_prompt=True, enable_thinking=False)
+    except TypeError:  # chat template without thinking support
+        text = tok.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     enc = tok(text, return_tensors="pt").to(model.device)
     out = model.generate(**enc, max_new_tokens=220, do_sample=False,
                          pad_token_id=tok.eos_token_id)
@@ -126,7 +130,11 @@ def _generate_taunt(outcome: str, wrong: str, missed: str, right: str) -> str:
     model, tok = _load(TAUNT_MODEL_ID)
     prompt = TAUNT_PROMPT.format(outcome=outcome, wrong=wrong, missed=missed, right=right)
     messages = [{"role": "user", "content": prompt}]
-    text = tok.apply_chat_template(messages, tokenize=False, add_generation_prompt=True, enable_thinking=False)
+    try:
+        text = tok.apply_chat_template(messages, tokenize=False,
+                                       add_generation_prompt=True, enable_thinking=False)
+    except TypeError:  # chat template without thinking support
+        text = tok.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     enc = tok(text, return_tensors="pt").to(model.device)
     out = model.generate(**enc, max_new_tokens=60, do_sample=True, temperature=0.8,
                          top_p=0.9, pad_token_id=tok.eos_token_id)
@@ -147,8 +155,10 @@ def culprit_taunt(report_rows: list, correct: bool) -> str | None:
             ", ".join(missed) or "nothing",
             ", ".join(right) or "nothing",
         ).strip().strip('"').split("\n")[0].strip()
-    except Exception:
+    except Exception as e:  # visible in Space logs; caller falls back to canned
+        print(f"[taunt] generation failed: {type(e).__name__}: {e}", flush=True)
         return None
+    print(f"[taunt] ok: {raw[:120]}", flush=True)
     # quality gate: reject JSON leakage (slot-filling fine-tune habit) and degenerate output
     if not raw or raw.startswith("{") or len(raw) < 15 or len(raw) > 220:
         return None

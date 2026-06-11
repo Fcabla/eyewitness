@@ -20,7 +20,7 @@ ANCHOR_TEXTS = {
 
 try:
     import spaces
-    _gpu = spaces.GPU(duration=40)
+    _gpu = spaces.GPU(duration=90)  # VoxCPM2 cold load is the long pole
 except Exception:
     def _gpu(fn):
         return fn
@@ -88,9 +88,12 @@ def speak(line: str, seed: int) -> tuple[int, "np.ndarray"] | None:
         sr, wav = _render(line, anchor_for_seed(seed))
         wav = np.asarray(wav)
         if wav.size < sr // 4 or wav.size > sr * 20:  # degenerate render guard
+            print(f"[voice] degenerate render: {wav.size} samples", flush=True)
             return None
         if wav.dtype != np.int16:
             wav = (np.clip(wav, -1.0, 1.0) * 32767).astype(np.int16)
+        print(f"[voice] ok: {wav.size / sr:.1f}s via anchor", flush=True)
         return int(sr), wav
-    except Exception:
+    except Exception as e:  # visible in Space logs; caller falls back to bank
+        print(f"[voice] render failed: {type(e).__name__}: {e}", flush=True)
         return None
