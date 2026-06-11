@@ -89,10 +89,12 @@ def build_voice_bank() -> dict[str, list[bytes]]:
 
     tts = VoxCPM.from_pretrained("openbmb/VoxCPM2")
 
+    sr = tts.tts_model.sample_rate  # 48 kHz — writing at the wrong rate slows
+    # the anchor 3x and garbles every line cloned from it (hard-won lesson)
     anchor_text = "Okay, okay. It was me. Take me in."
     anchor = tts.generate(text=anchor_text)
     anchor_path = "/tmp/anchor.wav"
-    sf.write(anchor_path, anchor, 16000)
+    sf.write(anchor_path, anchor, sr)
 
     def render(line: str):
         if line == anchor_text:
@@ -104,7 +106,7 @@ def build_voice_bank() -> dict[str, list[bytes]]:
         for line in lines:
             wav = render(line)
             buf = io.BytesIO()
-            sf.write(buf, wav, 16000, format="WAV")
+            sf.write(buf, wav, sr, format="WAV")
             rendered[kind].append(buf.getvalue())
     return rendered
 
@@ -130,3 +132,29 @@ def main():
             with open(f"assets/voice_{kind}_{i}.wav", "wb") as f:
                 f.write(blob)
     print("factory complete -> assets/")
+
+
+@app.function(image=voice_image, gpu="A10G", timeout=600)
+def probe_voice() -> dict:
+    """Diagnose VoxCPM output: true sample rate, array shape, attrs."""
+    import numpy as np
+    from voxcpm import VoxCPM
+
+    tts = VoxCPM.from_pretrained("openbmb/VoxCPM2")
+    wav = tts.generate(text="Okay, okay. It was me. Take me in.")
+    info = {
+        "shape": list(np.asarray(wav).shape),
+        "dtype": str(np.asarray(wav).dtype),
+        "attrs": [a for a in dir(tts) if "rate" in a.lower() or "sr" == a.lower()],
+    }
+    for a in info["attrs"]:
+        try:
+            info[f"val_{a}"] = str(getattr(tts, a))[:120]
+        except Exception:
+            pass
+    return info
+
+
+@app.local_entrypoint()
+def probe():
+    print(probe_voice.remote())
