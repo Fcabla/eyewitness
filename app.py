@@ -169,7 +169,10 @@ def next_case(s: dict) -> dict:
 CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Special+Elite&display=swap');
 :root { --paper:#f4efe4; --ink:#2b2a28; --red:#a33327; --tape:#c9a227; }
-.gradio-container { background:#191713 !important; font-family:'Courier New',monospace !important;
+.gradio-container, body, .dark, .light {
+  /* longhand wins the theme war: gradio light theme resets background-color */
+  background-color:#191713 !important;
+  font-family:'Courier New',monospace !important;
   background-image: radial-gradient(ellipse at 50% -10%, rgba(201,162,39,0.07) 0%, transparent 55%) !important; }
 #ew-root { max-width: 900px; margin: 0 auto; }
 .ew-header { text-align:center; color:var(--paper); letter-spacing:7px; font-size:34px; padding:12px 0 0;
