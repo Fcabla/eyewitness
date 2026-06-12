@@ -11,6 +11,7 @@ toggling desyncs in Gradio 6 once demo.load touches it (see FIELD_NOTES.md).
 from __future__ import annotations
 
 import base64
+import os
 import random
 
 import gradio as gr
