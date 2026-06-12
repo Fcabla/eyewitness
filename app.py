@@ -111,9 +111,9 @@ def report_table_html(report) -> str:
 def sketch_from_testimony(described: dict[str, str | None]) -> FaceSpec:
     """The artist draws exactly what you said; unsaid attrs get neutral defaults."""
     spec = {a: (v if v else "none") for a, v in described.items()}
-    neutral = {"face_shape": "oval", "skin": "medium", "hair_style": "short_messy",
-               "hair_color": "brown", "brows": "thin", "eyes": "normal", "nose": "small",
-               "mouth": "neutral"}
+    neutral = {"sex": "male", "age": "adult", "face_shape": "oval", "skin": "medium",
+               "hair_style": "short_messy", "hair_color": "brown", "brows": "thin",
+               "eyes": "normal", "nose": "small", "mouth": "neutral"}
     for a, v in neutral.items():
         if not described.get(a):
             spec[a] = v

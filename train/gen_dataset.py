@@ -20,6 +20,15 @@ from game.face import FaceSpec, VOCAB  # noqa: E402
 
 # phrasings per attribute value: list of (lang, template) — {x} never used, plain strings
 PHRASES: dict[str, dict[str, list[str]]] = {
+    "sex": {
+        "male": ["a man", "a guy", "definitely a dude", "un hombre", "un tio"],
+        "female": ["a woman", "a lady", "una mujer", "una tia, seguro"],
+    },
+    "age": {
+        "young": ["young, twenties maybe", "a young guy honestly", "joven, veintipocos", "un chaval"],
+        "adult": ["middle-aged", "thirties or forties", "de mediana edad", "ni joven ni mayor"],
+        "old": ["an older person", "elderly, white-ish hair", "mayor, un abuelo", "bastante mayor"],
+    },
     "face_shape": {
         "oval": ["oval face", "normal face shape", "cara normal, ovalada"],
         "round": ["round face", "roundish face", "chubby cheeks", "cara redonda", "carirredondo", "cara de pan"],

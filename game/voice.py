@@ -69,15 +69,17 @@ def preload():
 
 
 def anchor_for_case(seed: int, culprit=None) -> str:
-    """Voice casting: match timbre to visible attributes so a bearded suspect
-    doesn't speak in a high register. Imperfect by design — the sketch is
-    deliberately gender-neutral — but kills the jarring mismatches."""
+    """Voice casting from AUTHORED attributes: sex/age are categorical variables
+    of the suspect (no inference). Direct lookup, deterministic per case."""
     names = _available_anchors()
-    if culprit is not None and "low" in names:
-        if getattr(culprit, "facial_hair", "none") != "none":
-            return "low"
-        if getattr(culprit, "hair_style", "") in ("long", "ponytail") and "high" in names:
-            return ("high", "mid")[seed % 2] if "mid" in names else "high"
+    if culprit is not None:
+        sex = getattr(culprit, "sex", None)
+        age = getattr(culprit, "age", None)
+        want = {("male", "young"): "mid", ("male", "adult"): "low", ("male", "old"): "low",
+                ("female", "young"): "high", ("female", "adult"): "high",
+                ("female", "old"): "mid"}.get((sex, age))
+        if want in names:
+            return want
     return names[seed % len(names)]
 
 

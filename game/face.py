@@ -11,6 +11,8 @@ from dataclasses import dataclass, asdict, fields
 
 # ---------------------------------------------------------------- vocabulary
 VOCAB: dict[str, list[str]] = {
+    "sex": ["male", "female"],
+    "age": ["young", "adult", "old"],
     "face_shape": ["oval", "round", "square", "long"],
     "skin": ["light", "medium", "dark"],
     "hair_style": ["bald", "buzz", "short_messy", "slick_back", "curly", "long", "ponytail", "mohawk"],
@@ -27,6 +29,7 @@ VOCAB: dict[str, list[str]] = {
 
 # attributes a witness is MOST likely to notice — used to weight scoring/lineups
 SALIENCE = {
+    "sex": 3.0, "age": 2.0,
     "hat": 3.0, "hair_style": 2.5, "glasses": 2.5, "facial_hair": 2.5,
     "hair_color": 2.0, "extra": 2.0, "face_shape": 1.5, "mouth": 1.0,
     "brows": 1.0, "nose": 1.0, "eyes": 1.0, "skin": 1.5,
@@ -40,6 +43,8 @@ PAPER = "#f4efe4"
 
 @dataclass(frozen=True)
 class FaceSpec:
+    sex: str
+    age: str
     face_shape: str
     skin: str
     hair_style: str
@@ -241,6 +246,32 @@ def _extra(spec: FaceSpec) -> str:
     return ""
 
 
+
+
+def _sex_age(spec: FaceSpec) -> str:
+    """Comic-legible cues: lashes/lips=female, wrinkles=old, freckles=young."""
+    parts = []
+    if spec.sex == "female":
+        y = 158
+        for ex, flip in ((127, -1), (173, 1)):
+            x0 = ex + flip * 11
+            parts.append(
+                f'<path d="M{x0},{y-5} L{x0+flip*5},{y-8} M{x0+flip*2},{y-2} L{x0+flip*7},{y-4} '
+                f'M{x0+flip*3},{y+1} L{x0+flip*8},{y}" stroke="{INK}" stroke-width="1.6" fill="none"/>')
+        parts.append('<path d="M138,224 C146,229 154,229 162,224" stroke="#a35b52" '
+                     'stroke-width="3.5" fill="none" stroke-linecap="round" opacity="0.55"/>')
+    if spec.age == "old":
+        parts.append(f'<path d="M120,108 C135,104 165,104 180,108 M124,118 C138,114 162,114 176,118" '
+                     f'stroke="{INK}" stroke-width="1.5" fill="none" opacity="0.55"/>')
+        parts.append(f'<path d="M104,168 C102,176 102,184 105,190 M196,168 C198,176 198,184 195,190" '
+                     f'stroke="{INK}" stroke-width="1.4" fill="none" opacity="0.5"/>')
+        parts.append(f'<path d="M126,238 C132,242 140,243 146,242 M154,242 C160,243 168,242 174,238" '
+                     f'stroke="{INK}" stroke-width="1.3" fill="none" opacity="0.45"/>')
+    elif spec.age == "young":
+        parts.append("".join(f'<circle cx="{x}" cy="{y}" r="1.3" fill="{INK}" opacity="0.4"/>'
+                             for x, y in ((116, 186), (122, 192), (110, 192), (184, 186), (178, 192), (190, 192))))
+    return "".join(parts)
+
 def render_face_svg(spec: FaceSpec, width: int = 300, paper: bool = True, seed_jitter: int = 0) -> str:
     """Render a FaceSpec to a self-contained SVG string (sketch style)."""
     skin = SKIN_HEX[spec.skin]
@@ -276,6 +307,7 @@ def render_face_svg(spec: FaceSpec, width: int = 300, paper: bool = True, seed_j
   {_hat(spec)}
   {_glasses(spec)}
   {_extra(spec)}
+  {_sex_age(spec)}
 </g>
 </svg>'''
     return svg

@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from .face import FaceSpec, VOCAB, SALIENCE
 
 LABELS_EN = {
+    "sex": "Sex", "age": "Age",
     "face_shape": "Face", "skin": "Skin", "hair_style": "Hair", "hair_color": "Hair color",
     "brows": "Brows", "eyes": "Eyes", "glasses": "Glasses", "nose": "Nose",
     "mouth": "Mouth", "facial_hair": "Facial hair", "hat": "Headwear", "extra": "Marks",

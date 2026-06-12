@@ -17,6 +17,15 @@ from .face import VOCAB
 
 # attr -> value -> list of trigger phrases (EN + ES), checked longest-first
 SYNONYMS: dict[str, dict[str, list[str]]] = {
+    "sex": {
+        "male": ["a man", "a guy", "a dude", "male", "he was", "un hombre", "un tio", "un tipo", "un chico", "varon"],
+        "female": ["a woman", "a lady", "a girl", "female", "she was", "una mujer", "una tia", "una chica", "una senora"],
+    },
+    "age": {
+        "young": ["young", "a kid", "teenager", "in his twenties", "in her twenties", "joven", "un chaval", "una chavala", "veintipocos"],
+        "adult": ["middle aged", "middle-aged", "adult", "de mediana edad", "adulto", "cuarenton", "treintanero"],
+        "old": ["old", "elderly", "a senior", "retiree", "in his seventies", "mayor", "anciano", "anciana", "un abuelo", "una abuela", "viejo", "vieja", "jubilado"],
+    },
     "face_shape": {
         "oval": ["oval face", "cara ovalada", "oval"],
         "round": ["round face", "roundish", "chubby face", "cara redonda", "regordeta", "mofletudo"],
