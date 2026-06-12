@@ -84,6 +84,21 @@ def _render(line: str, anchor: str):
     return tts.tts_model.sample_rate, wav
 
 
+def trim_to_speech(wav: "np.ndarray", sr: int, pad_ms: int = 140) -> "np.ndarray":
+    """Cut leading non-speech (VoxCPM renders carry up to ~1.7s of it):
+    onset = first sustained RMS above an adaptive threshold."""
+    import numpy as np
+
+    win = max(1, int(sr * 0.03))
+    rms = np.sqrt(np.convolve(wav.astype(np.float32) ** 2,
+                              np.ones(win) / win, mode="same"))
+    thresh = max(0.04, 0.15 * float(rms.max()))
+    onset = int(np.argmax(rms > thresh))
+    if onset <= 0:
+        return wav
+    return wav[max(0, onset - int(sr * pad_ms / 1000)):]
+
+
 def speak(line: str, seed: int) -> tuple[int, "np.ndarray"] | None:
     """(sample_rate, int16 samples) for gr.Audio, or None on any failure."""
     import numpy as np
@@ -92,7 +107,7 @@ def speak(line: str, seed: int) -> tuple[int, "np.ndarray"] | None:
         return None
     try:
         sr, wav = _render(line, anchor_for_seed(seed))
-        wav = np.asarray(wav)
+        wav = trim_to_speech(np.asarray(wav), sr)
         if wav.size < sr // 4 or wav.size > sr * 20:  # degenerate render guard
             print(f"[voice] degenerate render: {wav.size} samples", flush=True)
             return None
