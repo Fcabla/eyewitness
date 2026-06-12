@@ -11,12 +11,12 @@ from pathlib import Path
 
 ASSETS = Path(__file__).resolve().parent.parent / "assets"
 
-# transcript of every anchor recording — cloning requires the exact prompt text
-ANCHOR_TEXTS = {
-    "gravel": "Deep, gravelly male voice, slow and self-satisfied. Okay, okay. It was me. Take me in.",
-    "sharp": "Sharp, fast female voice, mocking and theatrical. Okay, okay. It was me. Take me in.",
-    "nasal": "Thin, nasal male voice, whiny and indignant. Okay, okay. It was me. Take me in.",
-}
+# transcript of every anchor recording — cloning requires the exact prompt text.
+# Anchors are pitch-selected on real renders (117/173/249 Hz median f0, see
+# train/voice_lab.py): VoxCPM2 ignores textual style descriptions, so timbre
+# variety comes from measured selection, not wishful prompting.
+_ANCHOR_LINE = "Okay, okay. It was me. Take me in. But write this down properly, detective."
+ANCHOR_TEXTS = {"low": _ANCHOR_LINE, "mid": _ANCHOR_LINE, "high": _ANCHOR_LINE}
 
 try:
     import spaces
@@ -97,6 +97,8 @@ def speak(line: str, seed: int) -> tuple[int, "np.ndarray"] | None:
             print(f"[voice] degenerate render: {wav.size} samples", flush=True)
             return None
         if wav.dtype != np.int16:
+            peak = float(np.abs(wav).max()) or 1.0
+            wav = wav * (0.70 / peak)  # uniform headroom — live clones too
             wav = (np.clip(wav, -1.0, 1.0) * 32767).astype(np.int16)
         print(f"[voice] ok: {wav.size / sr:.1f}s via anchor", flush=True)
         return int(sr), wav
