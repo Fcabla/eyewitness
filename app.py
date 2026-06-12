@@ -129,6 +129,12 @@ def submit_testimony(s: dict, text: str) -> dict:
     s = dict(s)
     case: Case = s["case"]
     text = (text or "").strip()
+    if len(text) < 8:  # the artist refuses to draw from nothing
+        s["testimony_warn"] = ("The sketch artist looks at you. \"...That's it? "
+                               "Give me SOMETHING, detective. Face, hair, hat — anything.\"")
+        s["screen"] = "testimony"
+        return s
+    s.pop("testimony_warn", None)
     if HAS_MODEL:
         try:
             described = parse_testimony_model(text)
@@ -182,6 +188,16 @@ CSS = """
 .ew-card { background:var(--paper) !important; border-radius:4px; padding:22px 26px !important; color:var(--ink);
            box-shadow: 0 10px 40px rgba(0,0,0,.5); }
 .ew-card * { color: var(--ink); }
+/* inputs: gradio's dark theme paints them near-black — force paper on paper */
+.ew-card textarea, .ew-card input[type="text"], .ew-card input {
+  background: #fffdf6 !important; color: var(--ink) !important;
+  border: 1px solid #b9b09a !important; }
+.ew-card textarea::placeholder, .ew-card input::placeholder { color: #9a8f7c !important; }
+.ew-card label span { color: var(--ink) !important; }
+.ew-model-badge { font-family: monospace; font-size: 10.5px; letter-spacing: 1px;
+  color: #6d6354; background: #ece5d4; border: 1px dashed #b9b09a; border-radius: 4px;
+  padding: 4px 10px; margin: 2px 0 10px; display: inline-block; }
+.ew-warn { color: var(--red) !important; font-weight: bold; font-size: 13px; }
 .ew-glimpse { position:relative; width:320px; margin:0 auto; }
 .ew-glimpse::before { content:'● REC'; position:absolute; top:8px; left:10px; z-index:3;
   color:#e03b2f; font-size:12px; letter-spacing:2px; animation: ew-blink 1.1s step-end infinite; }
@@ -255,6 +271,10 @@ with gr.Blocks(title="EYEWITNESS") as demo:
                     gr.Markdown("### Tell the sketch artist everything.\n"
                                 "*Face, hair, glasses, beard, hat, marks… anything you remember. "
                                 "English o castellano.*")
+                    gr.HTML('<span class="ew-model-badge">🧠 NEXT: MiniCPM5-1B (fine-tuned) '
+                            'translates your words into the official attribute sheet</span>')
+                    if s.get("testimony_warn"):
+                        gr.HTML(f'<p class="ew-warn">{s["testimony_warn"]}</p>')
                     tb = gr.Textbox(lines=4, label="Your testimony",
                                     placeholder="e.g. round face, bushy eyebrows, beanie, sunglasses, big nose, looked smug...")
                     b = gr.Button("SEND TO SKETCH ARTIST", variant="primary")
@@ -275,6 +295,9 @@ with gr.Blocks(title="EYEWITNESS") as demo:
                                 gr.Markdown(f"**⚠ {case.disguise_line}**")
                         with gr.Column(scale=2):
                             gr.Markdown("### THE LINEUP — click the culprit")
+                            gr.HTML('<span class="ew-model-badge">⚙️ NO model here: the engine '
+                                    'builds the lineup FROM YOUR ERRORS — wrong claims get planted '
+                                    'on innocents; what you never mentioned becomes the disguise</span>')
                             n = len(s["lineup"])
                             rows = -(-n // 4)  # ceil
                             gal = gr.Gallery(
@@ -318,8 +341,13 @@ with gr.Blocks(title="EYEWITNESS") as demo:
   <div class="ew-line">{line} · Memory accuracy: <b>{report.weighted_pct}%</b></div>
 </div>
 {report_table_html(report)}""")
-                    voice = (live_speak(taunt, case.seed) if taunt else None) \
-                        or verdict_voice(correct)
+                    live_voice = live_speak(taunt, case.seed) if taunt else None
+                    voice = live_voice or verdict_voice(correct)
+                    badge = ('🧠 LIVE: MiniCPM5-1B (base) wrote that line about YOUR mistakes · '
+                             '🔊 VoxCPM2 cloned the suspect\'s voice just now'
+                             if live_voice else
+                             '🧠 LIVE: MiniCPM5-1B (base) wrote that line about YOUR mistakes')
+                    gr.HTML(f'<span class="ew-model-badge">{badge}</span>')
                     if voice:
                         # minimal kwargs: the Space's gradio build rejects newer
                         # Audio options like show_download_button
