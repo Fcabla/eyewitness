@@ -295,12 +295,16 @@ with gr.Blocks(title="EYEWITNESS") as demo:
                 truth_img = svg_uri(render_face_svg(case.culprit, width=240))
                 picked_img = svg_uri(render_face_svg(s["lineup"][s["picked"]], width=240))
                 head = "ARREST CONFIRMED" if correct else "WRONG ARREST"
-                # live, personalized taunt from the witness's actual mistakes;
-                # canned quote is the fallback at every step of the cascade
-                taunt = culprit_taunt(report.rows, correct) if HAS_MODEL else None
-                quote = (f"“{taunt}”" if taunt else
-                         ("“Okay, okay. It was me. Take me in.”" if correct
-                          else "“Wrong guy. I walked RIGHT past you. Twice.”"))
+                # personalized taunt: best-of-5 from the 1B, validated, with a
+                # deterministic personalized template as the floor — never canned
+                if HAS_MODEL:
+                    taunt = culprit_taunt(report.rows, correct, seed=case.seed)
+                else:
+                    from game.model import _template_taunt
+                    wrongs = [(l, s, t) for l, s, t, v in report.rows if v == "miss"][:3]
+                    misseds = [l for l, _s, _t, v in report.rows if v == "silent"][:3]
+                    taunt = _template_taunt(wrongs, misseds, correct, case.seed)
+                quote = f"“{taunt}”"
                 with gr.Column(elem_classes=["ew-card"]):
                     gr.HTML(f"""
 <div class="ew-verdict {'ew-good' if correct else 'ew-bad'}">
