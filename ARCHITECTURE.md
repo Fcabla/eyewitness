@@ -45,12 +45,22 @@ Rangos: ROOKIE (3s, rueda 4) → DETECTIVE (2s, 6) → INSPECTOR (1.5s, 6 + disf
 | `tests/test_engine.py` | QA: testimonios límite, equidad por simulación (400 partidas), bounds |
 | `deploy.sh` | Sube el Space a la org (idempotente) |
 
-## Modelos en runtime (~3.4B total)
+## Modelos en runtime (~4.5B total)
 
-- `Fcabla/MiniCPM5-1B-eyewitness` (1.08B, LoRA del MiniCPM5-1B) — parser de testimonios.
-  Variable de Space `EYEWITNESS_MODEL_ID` lo selecciona; sin ella usa el base.
-- VoxCPM2 (2.29B) — SOLO build-time hoy (banco pre-renderizado); el wav viaja en memoria
-  como (48000, int16 array) porque gr.Audio con rutas revienta en el Space.
+- `Fcabla/MiniCPM5-1B-eyewitness` (1.08B, LoRA) — parser de testimonios (SOLO sabe slot-filling:
+  olvido catastrófico verificado — balbucea dataset en prompts abiertos).
+- `openbmb/MiniCPM5-1B` base (1.08B) — escribe la pulla personalizada del veredicto desde el
+  diff dijiste/verdad (`culprit_taunt`). `enable_thinking=False` obligatorio (modelo razonador).
+- VoxCPM2 (2.29B) — voz del veredicto EN VIVO clonando un anchor (`game/voice.py`); banco
+  pre-renderizado como fallback. Audio siempre en memoria (48000, int16) — gr.Audio con rutas
+  fuera de allowed dirs revienta el render.
+
+**Cascada del veredicto**: pulla viva → voz viva → banco enlatado → solo texto. Cada `except`
+loguea su causa (`[taunt]`/`[voice]` en logs del Space).
+
+**Patrón ZeroGPU**: `preload()` carga los 3 modelos a CPU en el arranque; las funciones
+`@spaces.GPU` (20s parser/pulla, 30s voz) solo transfieren y generan. La cuota ZeroGPU admite
+por duración SOLICITADA — pedir de más = llamadas rechazadas para usuarios con poca cuota.
 
 ## Infra
 
