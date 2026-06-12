@@ -55,8 +55,22 @@ except Exception:
 try:  # live VoxCPM2 verdict voice (anchored per suspect); bank is the fallback
     from game.voice import speak as live_speak
 except Exception:
-    def live_speak(line, seed):
+    def live_speak(line, seed, culprit=None):
         return None
+
+try:  # spoken testimony (Cohere Transcribe primary, whisper fallback)
+    from game.asr import transcribe as asr_transcribe
+    HAS_ASR = True
+except Exception:
+    HAS_ASR = False
+
+
+def transcribe_testimony(s: dict, audio, current_text: str):
+    text = asr_transcribe(audio)
+    if not text:
+        return s, current_text
+    merged = (current_text.strip() + " " + text).strip() if current_text.strip() else text
+    return s, merged
 
 
 # ------------------------------------------------------------------ helpers
@@ -277,6 +291,15 @@ with gr.Blocks(title="EYEWITNESS") as demo:
                         gr.HTML(f'<p class="ew-warn">{s["testimony_warn"]}</p>')
                     tb = gr.Textbox(lines=4, label="Your testimony",
                                     placeholder="e.g. round face, bushy eyebrows, beanie, sunglasses, big nose, looked smug...")
+                    with gr.Row():
+                        mic = gr.Audio(sources=["microphone"], type="numpy",
+                                       label="…or SPEAK your testimony", scale=2)
+                        if HAS_ASR:
+                            gr.HTML('<span class="ew-model-badge">🎤 Cohere Transcribe 2B '
+                                    'writes down EXACTLY what you say — verbatim, like a real '
+                                    'court reporter</span>')
+                    if HAS_ASR:
+                        mic.stop_recording(transcribe_testimony, [state, mic, tb], [state, tb])
                     b = gr.Button("SEND TO SKETCH ARTIST", variant="primary")
                     b.click(submit_testimony, [state, tb], state)
 
@@ -298,6 +321,9 @@ with gr.Blocks(title="EYEWITNESS") as demo:
                             gr.HTML('<span class="ew-model-badge">⚙️ NO model here: the engine '
                                     'builds the lineup FROM YOUR ERRORS — wrong claims get planted '
                                     'on innocents; what you never mentioned becomes the disguise</span>')
+                            gr.Markdown("*Your sketch helps exactly as much as your memory was "
+                                        "right: trust it blindly and you'll arrest the innocent "
+                                        "wearing YOUR mistakes.*")
                             n = len(s["lineup"])
                             rows = -(-n // 4)  # ceil
                             gal = gr.Gallery(
@@ -341,7 +367,7 @@ with gr.Blocks(title="EYEWITNESS") as demo:
   <div class="ew-line">{line} · Memory accuracy: <b>{report.weighted_pct}%</b></div>
 </div>
 {report_table_html(report)}""")
-                    live_voice = live_speak(taunt, case.seed) if taunt else None
+                    live_voice = live_speak(taunt, case.seed, case.culprit) if taunt else None
                     voice = live_voice or verdict_voice(correct)
                     badge = ('🧠 LIVE: MiniCPM5-1B (base) wrote that line about YOUR mistakes · '
                              '🔊 VoxCPM2 cloned the suspect\'s voice just now'

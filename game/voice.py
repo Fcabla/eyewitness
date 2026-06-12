@@ -68,9 +68,21 @@ def preload():
         _load()
 
 
-def anchor_for_seed(seed: int) -> str:
+def anchor_for_case(seed: int, culprit=None) -> str:
+    """Voice casting: match timbre to visible attributes so a bearded suspect
+    doesn't speak in a high register. Imperfect by design — the sketch is
+    deliberately gender-neutral — but kills the jarring mismatches."""
     names = _available_anchors()
+    if culprit is not None and "low" in names:
+        if getattr(culprit, "facial_hair", "none") != "none":
+            return "low"
+        if getattr(culprit, "hair_style", "") in ("long", "ponytail") and "high" in names:
+            return ("high", "mid")[seed % 2] if "mid" in names else "high"
     return names[seed % len(names)]
+
+
+def anchor_for_seed(seed: int) -> str:  # backwards-compatible alias
+    return anchor_for_case(seed)
 
 
 @_gpu
@@ -99,14 +111,14 @@ def trim_to_speech(wav: "np.ndarray", sr: int, pad_ms: int = 140) -> "np.ndarray
     return wav[max(0, onset - int(sr * pad_ms / 1000)):]
 
 
-def speak(line: str, seed: int) -> tuple[int, "np.ndarray"] | None:
+def speak(line: str, seed: int, culprit=None) -> tuple[int, "np.ndarray"] | None:
     """(sample_rate, int16 samples) for gr.Audio, or None on any failure."""
     import numpy as np
 
     if not voice_enabled() or not line:
         return None
     try:
-        sr, wav = _render(line, anchor_for_seed(seed))
+        sr, wav = _render(line, anchor_for_case(seed, culprit))
         wav = trim_to_speech(np.asarray(wav), sr)
         if wav.size < sr // 4 or wav.size > sr * 20:  # degenerate render guard
             print(f"[voice] degenerate render: {wav.size} samples", flush=True)
