@@ -20,7 +20,7 @@ ANCHOR_TEXTS = {
 
 try:
     import spaces
-    _gpu = spaces.GPU(duration=90)  # VoxCPM2 cold load is the long pole
+    _gpu = spaces.GPU(duration=30)  # warm render only; model pre-loaded on CPU
 except Exception:
     def _gpu(fn):
         return fn
@@ -60,6 +60,12 @@ def _load():
                 from voxcpm import VoxCPM
                 _tts = VoxCPM.from_pretrained("openbmb/VoxCPM2")
     return _tts
+
+
+def preload():
+    """Called at Space startup (CPU): pay the VoxCPM2 download/load up front."""
+    if _available_anchors():
+        _load()
 
 
 def anchor_for_seed(seed: int) -> str:

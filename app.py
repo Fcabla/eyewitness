@@ -335,4 +335,12 @@ with gr.Blocks(title="EYEWITNESS") as demo:
 
 
 if __name__ == "__main__":
+    if os.environ.get("SPACES_ZERO_GPU"):  # pay model loads at startup, not per user
+        try:
+            from game import model as _m, voice as _v
+            _m.preload()
+            _v.preload()
+            print("[startup] models preloaded on CPU", flush=True)
+        except Exception as e:
+            print(f"[startup] preload failed (cascade covers it): {e}", flush=True)
     demo.launch(css=CSS)

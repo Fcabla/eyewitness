@@ -25,7 +25,10 @@ MODEL_ID = os.environ.get("EYEWITNESS_MODEL_ID", "openbmb/MiniCPM5-1B")
 
 try:  # ZeroGPU decorator when running in a HF Space
     import spaces
-    _gpu = spaces.GPU(duration=60)  # cold model load + generation; billed by use
+    # request small: ZeroGPU ADMITS calls by requested duration vs the visitor's
+    # remaining quota — oversized requests get rejected outright (seen in logs).
+    # Models are pre-loaded on CPU at startup, so calls only pay transfer+generate.
+    _gpu = spaces.GPU(duration=20)
 except Exception:  # local dev
     def _gpu(fn):
         return fn
@@ -58,6 +61,8 @@ def model_enabled() -> bool:
 
 
 def _load(model_id: str = MODEL_ID):
+    """ZeroGPU-canonical: weights live on CPU (loaded once per process); the
+    @spaces.GPU call moves them to CUDA. Keeps GPU calls short and admissible."""
     if model_id not in _models:
         with _lock:
             if model_id not in _models:
@@ -65,12 +70,20 @@ def _load(model_id: str = MODEL_ID):
                 from transformers import AutoModelForCausalLM, AutoTokenizer
                 tok = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
                 mdl = AutoModelForCausalLM.from_pretrained(
-                    model_id, trust_remote_code=True,
-                    torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-                    device_map="cuda" if torch.cuda.is_available() else "cpu",
-                )
+                    model_id, trust_remote_code=True, torch_dtype=torch.float16)
                 _models[model_id] = (mdl, tok)
-    return _models[model_id]
+    mdl, tok = _models[model_id]
+    import torch
+    if torch.cuda.is_available() and mdl.device.type != "cuda":
+        mdl.to("cuda")
+    return mdl, tok
+
+
+def preload():
+    """Called at Space startup (CPU): pay downloads/loads before any user."""
+    _load(MODEL_ID)
+    if TAUNT_MODEL_ID != MODEL_ID:
+        _load(TAUNT_MODEL_ID)
 
 
 def _schema_block() -> str:
