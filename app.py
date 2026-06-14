@@ -362,7 +362,11 @@ with gr.Blocks(title="EYEWITNESS") as demo:
                         lang = gr.Radio(["English", "Español"], value="English",
                                         label="Language you'll speak", show_label=True,
                                         interactive=True, elem_classes=["ew-lang"])
-                        mic = gr.Audio(sources=["microphone", "upload"], type="numpy",
+                        mic = gr.Audio(sources=["microphone", "upload"], type="filepath",
+                                       format="wav",  # normalize uploads (m4a/mp3) + recordings to wav
+                                       editable=False,  # skip the post-record trim editor: it decodes/
+                                       # re-encodes client-side, which freezes for minutes and uploads
+                                       # silence on some browsers. Upload (no editor) was instant+correct.
                                        label="Record your statement", show_label=False,
                                        waveform_options={"show_recording_waveform": False})
                         mic.stop_recording(transcribe_testimony, [mic, tb, lang], [tb])

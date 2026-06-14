@@ -52,49 +52,66 @@ def preload():
 
 
 @_gpu
-def transcribe(audio: tuple[int, "np.ndarray"] | None, language: str = "en") -> str:
-    """gr.Audio mic tuple -> witness text in the chosen language ('en'/'es').
-    Decodes in the witness's language; only retries the other language if that
-    pass is empty. Empty string on any failure (never fabricated text)."""
+def transcribe(audio: "str | tuple[int, np.ndarray] | None", language: str = "en") -> str:
+    """gr.Audio filepath (or legacy (sr, array) tuple) -> witness text in the
+    selected language ('en'/'es'). Empty string on any failure, and a silent clip
+    returns "" rather than a hallucination — never fabricated text."""
     import numpy as np
 
     if audio is None:
         return ""
-    sr, wav = audio
+    # Read as float [-1, 1]. soundfile handles wav/flac/ogg; librosa (ffmpeg) covers
+    # m4a/mp3/opus uploads. (gr.Audio has format="wav", so recordings arrive as wav.)
+    # A legacy (sample_rate, numpy) tuple is still accepted.
+    if isinstance(audio, str):
+        try:
+            import soundfile as sf
+            wav, sr = sf.read(audio, dtype="float32", always_2d=False)
+        except Exception as e_sf:  # libsndfile can't do m4a/aac/mp3/opus -> ffmpeg via librosa
+            import librosa
+            wav, sr = librosa.load(audio, sr=None, mono=True)
+            wav = np.asarray(wav, dtype=np.float32)
+            print(f"[asr] soundfile failed ({type(e_sf).__name__}: {e_sf}); "
+                  f"used librosa/ffmpeg", flush=True)
+    else:
+        sr, wav = audio
+        wav = np.asarray(wav, dtype=np.float32)
+        if np.abs(wav).max() > 1.5:  # legacy int16-ranged numpy input
+            wav = wav / 32768.0
     wav = np.asarray(wav, dtype=np.float32)
     if wav.ndim > 1:
         wav = wav.mean(axis=1)
-    if np.abs(wav).max() > 1.5:  # int16-ranged input
-        wav = wav / 32768.0
-    if len(wav) < sr // 2:
+    # Silence guard: a silent/near-silent clip must NOT be fed to the model — it
+    # answers confident hallucinations. Return "" instead.
+    peak = float(np.abs(wav).max()) if wav.size else 0.0
+    if len(wav) < sr // 2 or peak < 1e-3:
+        print(f"[asr] no usable audio (samples={len(wav)}, peak={peak:.5f}) -> empty", flush=True)
         return ""
-    primary = language if language in ("en", "es") else "en"
-    order = [primary, "es" if primary == "en" else "en"]  # other lang as fallback
+    wav = (wav / peak) * 0.9  # level-match the model's expected input (demo peaks ~0.9)
+    lang = language if language in ("en", "es") else "en"  # explicit UI selector; no guessing
     try:
         import torch
         proc, mdl = _load()
-        if sr != 16000:
-            try:  # proper anti-aliased resample; never hard-fail on a missing dep
-                import librosa
-                wav = librosa.resample(np.ascontiguousarray(wav), orig_sr=sr, target_sr=16000)
+        if sr != 16000:  # fast polyphase resample (librosa's default was ~13s on mic clips)
+            try:
+                from scipy.signal import resample_poly
+                wav = resample_poly(wav, 16000, sr).astype(np.float32)
             except Exception:
-                idx = np.linspace(0, len(wav) - 1, int(len(wav) * 16000 / sr))
-                wav = wav[np.floor(idx).astype(int)]
-        for lang in order:
-            # `language` is a REQUIRED processor arg: it builds the decoder prompt.
-            inputs = proc(wav, language=lang, sampling_rate=16000, return_tensors="pt")
-            inputs = {k: (v.to(mdl.device, dtype=mdl.dtype) if v.dtype.is_floating_point
-                          else v.to(mdl.device)) for k, v in inputs.items()
-                      if hasattr(v, "to")}
-            with torch.no_grad():
-                ids = mdl.generate(**inputs, max_new_tokens=120)
-            text = proc.batch_decode(ids, skip_special_tokens=True)[0].strip()
-            if text:  # chosen language won; the other is only tried if this is empty
-                print(f"[asr] ok ({lang}): {text[:90]}", flush=True)
-                return text
-            print(f"[asr] empty ({lang}), trying fallback", flush=True)
-        print("[asr] empty in both languages", flush=True)
-        return ""
+                try:
+                    import librosa
+                    wav = librosa.resample(np.ascontiguousarray(wav), orig_sr=sr, target_sr=16000)
+                except Exception:
+                    idx = np.linspace(0, len(wav) - 1, int(len(wav) * 16000 / sr))
+                    wav = wav[np.floor(idx).astype(int)]
+        # `language` is a REQUIRED processor arg: it builds the decoder prompt.
+        inputs = proc(wav, language=lang, sampling_rate=16000, return_tensors="pt")
+        inputs = {k: (v.to(mdl.device, dtype=mdl.dtype) if v.dtype.is_floating_point
+                      else v.to(mdl.device)) for k, v in inputs.items() if hasattr(v, "to")}
+        with torch.no_grad():
+            ids = mdl.generate(**inputs, max_new_tokens=120)
+        text = proc.batch_decode(ids, skip_special_tokens=True)[0].strip()
+        print(f"[asr] {lang}: {text[:90]!r}", flush=True)
+        return text
     except Exception as e:
         print(f"[asr] failed: {type(e).__name__}: {e}", flush=True)
         return ""
@@ -107,13 +124,10 @@ def _selftest():
     if os.getenv("ASR_SELFTEST") != "1":
         return
     try:
-        import numpy as np
-        import soundfile as sf
         from huggingface_hub import hf_hub_download
         path = hf_hub_download(repo_id=COHERE_ASR_ID,
                                filename="demo/voxpopuli_test_en_demo.wav")
-        wav, sr = sf.read(path, dtype="float32")
-        text = transcribe((int(sr), np.asarray(wav)), "en")
+        text = transcribe(path, "en")  # exercise the exact filepath path the mic uses
         print(f"[asr-selftest] OK: {text!r}", flush=True)
     except Exception as e:
         import traceback
