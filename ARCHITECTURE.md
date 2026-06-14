@@ -45,22 +45,30 @@ Rangos: ROOKIE (3s, rueda 4) → DETECTIVE (2s, 6) → INSPECTOR (1.5s, 6 + disf
 | `tests/test_engine.py` | QA: testimonios límite, equidad por simulación (400 partidas), bounds |
 | `deploy.sh` | Sube el Space a la org (idempotente) |
 
-## Modelos en runtime (~4.5B total)
+## Modelos en runtime (~5.7B total)
 
 - `Fcabla/MiniCPM5-1B-eyewitness` (1.08B, LoRA) — parser de testimonios (SOLO sabe slot-filling:
-  olvido catastrófico verificado — balbucea dataset en prompts abiertos).
-- `openbmb/MiniCPM5-1B` base (1.08B) — escribe la pulla personalizada del veredicto desde el
-  diff dijiste/verdad (`culprit_taunt`). `enable_thinking=False` obligatorio (modelo razonador).
+  olvido catastrófico verificado — balbucea dataset en prompts abiertos). OJO: en inferencia
+  exige el formato EXACTO de entrenamiento (SYSTEM corto + `Witness testimony: "..."`); con el
+  prompt few-shot del base parrotea los valores del ejemplo (fedora fantasma, 12 jun).
+- `openbmb/MiniCPM5-1B` base (1.08B) — escribe la COLETILLA personalizada del veredicto desde el
+  diff dijiste/verdad (`culprit_taunt`); solo entra si pasa validación + actitud. El chiste
+  principal del veredicto es AUTORADO por crimen (`CRIME_TAUNTS` en casegen.py — el lab demostró
+  ~3% de acierto en comedia libre del 1B). `enable_thinking=False` obligatorio (modelo razonador).
+- `CohereLabs/cohere-transcribe-03-2026` (2B) — ASR del testimonio hablado, EN EXCLUSIVA (sponsor).
+  `language` es obligatorio: se transcribe con `en` Y `es` y gana el de mayor log-prob medio.
 - VoxCPM2 (2.29B) — voz del veredicto EN VIVO clonando un anchor (`game/voice.py`); banco
   pre-renderizado como fallback. Audio siempre en memoria (48000, int16) — gr.Audio con rutas
   fuera de allowed dirs revienta el render.
 
-**Cascada del veredicto**: pulla viva → voz viva → banco enlatado → solo texto. Cada `except`
-loguea su causa (`[taunt]`/`[voice]` en logs del Space).
+**Veredicto**: punchline autorado del crimen + coletilla de memoria (1B vivo si pasa el listón,
+autorada si no) → voz viva → banco enlatado → solo texto. Cada `except` loguea su causa
+(`[taunt]`/`[voice]`/`[asr]` en logs del Space).
 
-**Patrón ZeroGPU**: `preload()` carga los 3 modelos a CPU en el arranque; las funciones
-`@spaces.GPU` (20s parser/pulla, 30s voz) solo transfieren y generan. La cuota ZeroGPU admite
-por duración SOLICITADA — pedir de más = llamadas rechazadas para usuarios con poca cuota.
+**Patrón ZeroGPU**: en el arranque se precargan a CPU el parser+pulla (model.py), la voz
+(voice.py) y el ASR (asr.py) — así el primer testimonio hablado no paga la carga del 2B de
+Cohere. Las funciones `@spaces.GPU` (20s parser/pulla/ASR, 30s voz) solo transfieren y generan.
+La cuota ZeroGPU admite por duración SOLICITADA — pedir de más = llamadas rechazadas.
 
 ## Infra
 
@@ -71,8 +79,10 @@ por duración SOLICITADA — pedir de más = llamadas rechazadas para usuarios c
 
 ## Limitaciones conocidas (candidatas a iteración)
 
-1. La voz del veredicto es de un banco de 6 líneas fijas — no referencia TUS errores,
-   y el timbre no siempre casa con la cara del sospechoso.
-2. El 1B trabaja una sola vez por ronda (parse) — su papel es invisible para el jurado.
-3. El glimpse es vulnerable a inspeccionar el DOM (la cara sigue en el HTML borroso).
-4. El parser puede alucinar atributos no mencionados (mitigado: Tier A manda donde habló).
+1. La pulla del veredicto es chiste sobre el CRIMEN (banco autorado de 64 líneas + 1B base
+   improvisando por encima cuando pasa validación). Riesgo: cuando entra el modelo, la
+   calidad es variable (legible pero no siempre tan buena como el banco curado).
+2. El glimpse es vulnerable a inspeccionar el DOM (la cara sigue en el HTML borroso).
+3. El parser puede alucinar atributos no mencionados (mitigado: Tier A manda donde habló).
+4. Crash SIGSEGV espontáneo visto 1 vez en local (C-level, en el writer de stdout durante
+   render de voz concurrente) — no reproducido en el Space; observar tras deploy.

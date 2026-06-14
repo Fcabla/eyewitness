@@ -35,7 +35,7 @@ SYNONYMS: dict[str, dict[str, list[str]]] = {
     "skin": {
         "light": ["pale", "light skin", "fair skin", "palido", "piel clara", "blanquito"],
         "medium": ["tan", "medium skin", "olive skin", "moreno claro", "piel media", "tostado"],
-        "dark": ["dark skin", "dark-skinned", "piel oscura", "moreno oscuro", "negro"],
+        "dark": ["dark skin", "dark-skinned", "piel oscura", "piel negra", "moreno oscuro"],
     },
     "hair_style": {
         "bald": ["bald", "no hair", "shaved head", "calvo", "sin pelo", "rapado al cero"],

@@ -1,8 +1,10 @@
 cairosvg
 pillow
-transformers
+transformers>=5.11           # cohere_asr (Cohere Transcribe) lands here; older builds lack it
 accelerate
 torch
 spaces
 voxcpm
 numpy
+librosa                      # proper 48k->16k resample for mic audio (Cohere wants 16k)
+soundfile                    # audio I/O backend (librosa + ASR self-test demo wav)

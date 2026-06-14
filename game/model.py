@@ -102,11 +102,18 @@ Map loose language to the closest allowed value, even when words are split apart
 "gafas de esas de abuelo, redondas"->glasses "round"). English or Spanish.
 
 Example testimony: "uno con sombrero, la nariz enorme, y el pelo todo engominado hacia atras"
-Example JSON: {{"face_shape": null, "skin": null, "hair_style": "slick_back", "hair_color": null, "brows": null, "eyes": null, "glasses": null, "nose": "big", "mouth": null, "facial_hair": null, "hat": "fedora", "extra": null}}
+Example JSON: {{"sex": "male", "age": null, "face_shape": null, "skin": null, "hair_style": "slick_back", "hair_color": null, "brows": null, "eyes": null, "glasses": null, "nose": "big", "mouth": null, "facial_hair": null, "hat": "fedora", "extra": null}}
 
 Witness testimony: "{testimony}"
 
 JSON:"""
+
+# The fine-tune was trained on THIS exact chat shape (train_modal.py) — feeding
+# it the few-shot PROMPT above poisons it: it parrots the example's values
+# (fedora, bushy, big nose) into every parse. Schema-in-prompt is only for base.
+FINETUNE_SYSTEM = ("You are a police sketch-artist assistant. Extract ONLY what the witness "
+                   "said into the attribute JSON. Use null for anything not mentioned. "
+                   "Output only the JSON object.")
 
 
 @_gpu
@@ -114,8 +121,12 @@ def _generate(testimony: str) -> str:
     model, tok = _load()
     # json.dumps gives fully-escaped quoting; bare replace() left injectable quotes
     safe = json.dumps(testimony, ensure_ascii=False)[1:-1]
-    prompt = PROMPT.format(schema=_schema_block(), testimony=safe)
-    messages = [{"role": "user", "content": prompt}]
+    if MODEL_ID != "openbmb/MiniCPM5-1B":  # fine-tune: match its training shape
+        messages = [{"role": "system", "content": FINETUNE_SYSTEM},
+                    {"role": "user", "content": f'Witness testimony: "{safe}"'}]
+    else:
+        prompt = PROMPT.format(schema=_schema_block(), testimony=safe)
+        messages = [{"role": "user", "content": prompt}]
     try:
         text = tok.apply_chat_template(messages, tokenize=False,
                                        add_generation_prompt=True, enable_thinking=False)
@@ -127,26 +138,26 @@ def _generate(testimony: str) -> str:
     return tok.decode(out[0][enc["input_ids"].shape[1]:], skip_special_tokens=True)
 
 
-TAUNT_PROMPT = """Roleplay: you are a smug petty criminal taunting the detective who questioned a witness about you. You were {outcome}.
-The witness's mistakes about your appearance:
-{wrong_lines}
-Mock the detective in ONE short sentence (max 22 words), first person, naming one specific mistake. Gloat — never describe yourself neutrally.
+TAUNT_PROMPT = """Roleplay: you are a petty criminal with theatrical flair, just {outcome}. Your crime — {crime_name}: you {blurb}.
+Say ONE short, funny line (max 20 words), first person, about the crime or your situation right now. Wit over information. No explanations, no quotes.
 
-Examples of your style:
-- A BEANIE? I wear a fedora, sweetheart. Ask the mirror how your memory feels.
-- Curly hair? I spend twenty minutes slicking it back and THIS is my reward?
+Examples of the ENERGY (different crimes — steal the attitude, never the words):
+- The watch kept perfect time for 300 years. With me it finally had somewhere to BE.
+- You can't arrest a man for finishing a chorus. Artistically, I was contractually obligated.
+- Some poor soul is signing MY paperwork right now. Give him my coffee order.
 
 Your line:"""
 
-_BANNED = ("witness", "detective game", "criminal's", "roleplay", "example",
-           "scenario", "one-liner", "the suspect", "i am a smug")
+_BANNED = ("witness", "roleplay", "example", "scenario", "one-liner",
+           "i'm sorry", "as an ai", "i am an ai", "language model", "assistant",
+           "the criminal", "the culprit", "the suspect")
 
 
 @_gpu
-def _generate_taunt_batch(outcome: str, wrong_lines: str, n: int = 5) -> list[str]:
-    """One GPU call, n sampled candidates (best-of-N beats a 1B's ~20% hit rate)."""
+def _generate_taunt_batch(crime_name: str, blurb: str, outcome: str, n: int = 6) -> list[str]:
+    """One GPU call, n sampled candidates (best-of-N beats a 1B's low hit rate)."""
     model, tok = _load(TAUNT_MODEL_ID)
-    prompt = TAUNT_PROMPT.format(outcome=outcome, wrong_lines=wrong_lines)
+    prompt = TAUNT_PROMPT.format(crime_name=crime_name, blurb=blurb, outcome=outcome)
     messages = [{"role": "user", "content": prompt}]
     try:
         text = tok.apply_chat_template(messages, tokenize=False,
@@ -154,92 +165,76 @@ def _generate_taunt_batch(outcome: str, wrong_lines: str, n: int = 5) -> list[st
     except TypeError:  # chat template without thinking support
         text = tok.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     enc = tok(text, return_tensors="pt").to(model.device)
-    out = model.generate(**enc, max_new_tokens=55, do_sample=True, temperature=0.75,
-                         top_p=0.9, num_return_sequences=n,
+    out = model.generate(**enc, max_new_tokens=45, do_sample=True, temperature=0.85,
+                         top_p=0.92, num_return_sequences=n,
                          pad_token_id=tok.eos_token_id)
     return [tok.decode(seq[enc["input_ids"].shape[1]:], skip_special_tokens=True)
             .strip().strip('"').split("\n")[0].strip() for seq in out]
 
 
-def _valid_taunt(line: str, anchors: list[str]) -> bool:
-    """Must reference a real detail of THIS case, read first-person, stay clean."""
+def _has_attitude(line: str) -> bool:
+    """Flat lines lose to the authored floor; only lines with comic bite
+    (incredulity, emphasis) earn the spotlight."""
+    return ("?" in line or "!" in line
+            or any(w.isupper() and len(w) >= 3 for w in line.split()))
+
+
+_KW_STOP = {"with", "from", "that", "this", "they", "them", "were", "just", "made",
+            "over", "into", "walked", "year", "years", "which", "belonged", "entire",
+            "caught", "training", "stole", "stolen", "steal", "boarded", "returned",
+            "rolled", "night", "city", "out", "off", "the", "and", "his", "her"}
+
+
+def _crime_keywords(crime_name: str, blurb: str) -> list[str]:
+    """The concrete nouns of THIS crime (watch, gnomes, manchego...) — a valid
+    taunt must name at least one, so it's about this case, not generic mush."""
+    text = f"{crime_name} {blurb}".lower()
+    return [w for w in re.findall(r"[a-z]{4,}", text) if w not in _KW_STOP]
+
+
+def _valid_situational(line: str, keywords: list[str]) -> bool:
+    """About THIS crime, first-person, has comic bite, clean, right length."""
     words = line.split()
-    if not (6 <= len(words) <= 28):
+    if not (5 <= len(words) <= 24):
         return False
     low = line.lower()
     if any(b in low for b in _BANNED):
         return False
-    if not any(a in low for a in anchors):  # must cite a concrete case detail
+    if not any(k in low for k in keywords):  # must be about this crime
         return False
-    # role confusion: case attributes claimed of the DETECTIVE ("your beard...",
-    # "you're wearing curly hair", "I said your glasses") — the 1B's main failure
-    for a in anchors:
-        if f"your {a}" in low or f"you're wearing {a}" in low or f"you are wearing {a}" in low:
-            return False
-    if "i said your" in low or "you said my" in low and "you said my" != low[:11]:
-        pass  # "you said my X" is FINE (culprit quoting the detective's claim)
-    return ("i" in low.split() or "i'm" in low or "my" in low.split() or low.startswith(("a ", "an ")))
+    first_person = ("i" in low.split() or "i'm" in low
+                    or "my" in low.split() or low.startswith(("the ", "a ")))
+    return first_person and _has_attitude(line)
 
 
-def _template_taunt(wrongs: list, misseds: list, correct: bool, seed: int) -> str:
-    """Deterministic personalized fallback — even the worst case stays dynamic."""
+def culprit_taunt(crime_name: str, crime_blurb: str, correct: bool, seed: int = 0,
+                  use_model: bool = True) -> tuple[str, str]:
+    """Verdict line -> (line, source) where source is 'model' or 'template'.
+    The culprit jokes about the CRIME and the situation (caught/escaped), never
+    the witness's appearance errors. An authored pool per crime is the floor;
+    the live base 1B replaces it only when a candidate is about this crime AND
+    has comic attitude (taunt_lab: free-form 1B comedy lands ~3% of the time)."""
     import random as _r
+    from .casegen import CRIME_TAUNTS, GENERIC_TAUNTS
+
     rng = _r.Random(seed)
-    if wrongs:
-        label, said, truth = rng.choice(wrongs)
-        if correct:
-            line = rng.choice([
-                f"You got me — but '{said}'? It's a {truth}, detective. It was ALWAYS a {truth}.",
-                f"Fine, cuff me. But tell the sketch artist my {label.lower()} is a {truth}, not '{said}'.",
-            ])
-        else:
-            line = rng.choice([
-                f"'{said}'? It was a {truth}. The wrong man you arrested sends his regards.",
-                f"They wrote down '{said}'. A {truth}, people. I walked free on YOUR {label.lower()} mistake.",
-            ])
-    else:
-        line = ("Lucky badge, goldfish memory. You couldn't name ONE thing about me." if correct
-                else "You remembered NOTHING about me. Honestly? I'm almost offended.")
-    if misseds and rng.random() < 0.6:
-        line += f" And you never even noticed my {rng.choice(misseds).lower()}."
-    return line
-
-
-def _claims_wrong_value(line: str, wrongs: list) -> bool:
-    """Reject lines asserting the WITNESS'S wrong value as the culprit's truth
-    (e.g. truth=goatee but line says 'I have a full beard')."""
-    low = line.lower()
-    for _label, said, _truth in wrongs:
-        if re.search(rf"i\s+(?:have|wear|am wearing|'m wearing|got)\b[^.;!?]*\b{re.escape(said.lower())}", low):
-            return True
-    return False
-
-
-def culprit_taunt(report_rows: list, correct: bool, seed: int = 0) -> str:
-    """Personalized verdict line. Pipeline: best-of-5 from the base 1B, strict
-    validation, deterministic personalized template as the floor. ALWAYS returns
-    a line that references this round's actual mistakes — never canned."""
-    wrongs = [(label, said, truth) for label, said, truth, v in report_rows if v == "miss"][:3]
-    misseds = [label for label, _s, _t, v in report_rows if v == "silent"][:3]
-    wrong_lines = "\n".join(f"- they said your {l.lower()} was {s}; it is actually {t}"
-                            for l, s, t in wrongs) \
-        or "- they remembered nothing specific about you at all"
-    anchors = [w.lower() for _l, s, t in wrongs for w in (s.split() + t.split())] \
-        or [m.lower() for m in misseds] or ["nothing", "remember"]
-    try:
-        cands = _generate_taunt_batch(
-            "caught red-handed" if correct else "wrongly let go (they arrested an innocent man)",
-            wrong_lines)
-        good = [c for c in cands
-                if _valid_taunt(c, anchors) and not _claims_wrong_value(c, wrongs)]
-        if good:
-            best = max(good, key=len)
-            print(f"[taunt] model {len(good)}/{len(cands)} valid: {best[:110]}", flush=True)
-            return best
-        print(f"[taunt] 0/{len(cands)} valid -> template", flush=True)
-    except Exception as e:  # visible in Space logs
-        print(f"[taunt] generation failed -> template: {type(e).__name__}: {e}", flush=True)
-    return _template_taunt(wrongs, misseds, correct, seed)
+    outcome = "caught" if correct else "escaped"
+    authored = rng.choice(CRIME_TAUNTS.get(crime_name, GENERIC_TAUNTS)[outcome])
+    if use_model:
+        try:
+            cands = _generate_taunt_batch(
+                crime_name, crime_blurb,
+                "caught red-handed" if correct else "let go — they pinned it on an innocent man")
+            kw = _crime_keywords(crime_name, crime_blurb)
+            good = [c for c in cands if _valid_situational(c, kw)]
+            if good:
+                best = max(good, key=lambda c: ("?" in c or "!" in c, len(c)))
+                print(f"[taunt] model {len(good)}/{len(cands)}: {best[:110]}", flush=True)
+                return best, "model"
+            print(f"[taunt] 0/{len(cands)} usable -> authored", flush=True)
+        except Exception as e:  # visible in Space logs
+            print(f"[taunt] generation failed -> authored: {type(e).__name__}: {e}", flush=True)
+    return authored, "template"
 
 
 def parse_testimony_model(testimony: str) -> dict[str, str | None]:

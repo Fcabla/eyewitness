@@ -38,14 +38,16 @@ a barber since").
 
 | Stage | Who does it |
 |---|---|
-| Your messy testimony → strict attribute JSON | **MiniCPM5-1B** (slot-filling over a closed vocabulary — exactly what a 1B is great at) |
+| Spoken testimony → verbatim text (EN/ES) | **Cohere Transcribe 2B** — a court reporter, not an interpreter: it writes down what you SAID |
+| Your messy testimony → strict attribute JSON | **[MiniCPM5-1B fine-tune](https://huggingface.co/Fcabla/MiniCPM5-1B-eyewitness)** (LoRA, slot-filling over a closed vocabulary — exactly what a 1B is great at) |
 | The composite sketch, the lineup, the scoring | A deterministic engine. Ground truth is **authored, never detected** — the game always knows the culprit's exact face, so difficulty is honest and the scoring is transparent |
+| The culprit's verdict taunt — a joke about the CRIME and his fate | **MiniCPM5-1B** (base; improvises live, best-of-6 + validators, with an authored per-crime floor) |
+| The culprit's voice, cloned live | **VoxCPM2** (anchor voices cast by sex/age, selected by measured pitch) |
 | Crime flavor + case bank | MiniCPM5-1B-GGUF batch-generated **via llama.cpp on Modal** |
-| The culprit's voice | **VoxCPM2** (pre-rendered lines — zero GPU in the cursor path) |
 
-**Runtime stack ≈ 3.4B parameters. No cloud APIs at runtime.** Every reveal shows
-*what you said → what the artist drew → the truth*, side by side — fairness by
-transparency.
+**Runtime stack ≈ 5.7B parameters, all inside this Space. No cloud APIs.** Every
+reveal shows *what you said → what the artist drew → the truth*, side by side —
+fairness by transparency.
 
 ## Team
 
@@ -53,9 +55,10 @@ transparency.
 
 ## Links
 
-- Demo video: `<TODO>`
-- Social post: `<TODO>`
-- Source: this repo (`app.py`, `game/`, `modal_factory.py`)
+- Demo video: https://youtu.be/BKOjBMKcb_E
+- Social post: https://x.com/i/status/2065901377465819231
+- Source code: [github.com/fcabla/eyewitness](https://github.com/fcabla/eyewitness)
+- Fine-tuned parser: [Fcabla/MiniCPM5-1B-eyewitness](https://huggingface.co/Fcabla/MiniCPM5-1B-eyewitness)
 
 *Built for the Build Small Hackathon (Thousand Token Wood track) with Claude Code
 doing the engineering. Lineage: every eyewitness-memory study ever published ×

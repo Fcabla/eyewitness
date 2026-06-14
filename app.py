@@ -58,19 +58,20 @@ except Exception:
     def live_speak(line, seed, culprit=None):
         return None
 
-try:  # spoken testimony (Cohere Transcribe primary, whisper fallback)
+try:  # spoken testimony (Cohere Transcribe 2B, sponsor model)
     from game.asr import transcribe as asr_transcribe
     HAS_ASR = True
 except Exception:
     HAS_ASR = False
 
 
-def transcribe_testimony(s: dict, audio, current_text: str):
-    text = asr_transcribe(audio)
-    if not text:
-        return s, current_text
-    merged = (current_text.strip() + " " + text).strip() if current_text.strip() else text
-    return s, merged
+def transcribe_testimony(audio, current_text: str, lang_label: str):
+    lang = "es" if (lang_label or "").lower().startswith(("es", "span")) else "en"
+    text = asr_transcribe(audio, lang)
+    merged = (current_text.strip() + " " + text).strip() if (current_text or "").strip() else text
+    out = merged if text else (current_text or "")
+    print(f"[ui] transcribe -> {len(text or '')} chars into textbox", flush=True)
+    return out
 
 
 # ------------------------------------------------------------------ helpers
@@ -195,21 +196,84 @@ CSS = """
   font-family:'Courier New',monospace !important;
   background-image: radial-gradient(ellipse at 50% -10%, rgba(201,162,39,0.07) 0%, transparent 55%) !important; }
 #ew-root { max-width: 900px; margin: 0 auto; }
-.ew-header { text-align:center; color:var(--paper); letter-spacing:7px; font-size:34px; padding:12px 0 0;
+.ew-header { text-align:center; color:var(--paper) !important; letter-spacing:7px; font-size:34px; padding:12px 0 0;
   font-family:'Special Elite','Courier New',monospace; text-shadow: 0 2px 0 rgba(0,0,0,.6); }
-.ew-sub { text-align:center; color:#8d8678; font-size:12px; letter-spacing:2px; margin-bottom:8px; }
-.ew-rank { font-family:monospace; color:var(--tape); text-align:center; letter-spacing:2px; font-size:13px; }
-.ew-card { background:var(--paper) !important; border-radius:4px; padding:22px 26px !important; color:var(--ink);
+.ew-sub { text-align:center; color:#8d8678 !important; font-size:12px; letter-spacing:2px; margin-bottom:8px; }
+.ew-rank { font-family:monospace; color:var(--tape) !important; text-align:center; letter-spacing:2px; font-size:13px; }
+.ew-card { background:var(--paper) !important; border-radius:4px; padding:22px 26px !important; color:var(--ink) !important;
            box-shadow: 0 10px 40px rgba(0,0,0,.5); }
-.ew-card * { color: var(--ink); }
-/* inputs: gradio's dark theme paints them near-black — force paper on paper */
+.ew-card * { color: var(--ink) !important; }
+.ew-card .prose, .ew-card .prose *, .ew-card .markdown, .ew-card .markdown *,
+.ew-card .gr-block, .ew-card .gr-block *, .ew-card .gr-form, .ew-card .gr-form *,
+.ew-card span, .ew-card div, .ew-card p, .ew-card h1, .ew-card h2, .ew-card h3,
+.ew-card h4, .ew-card strong, .ew-card em, .ew-card figcaption, .ew-card td, .ew-card th {
+  color: var(--ink) !important; }
+.ew-card .prose a, .ew-card .markdown a { color: var(--red) !important; }
+.ew-card .prose code, .ew-card .markdown code { color: var(--ink) !important; background: #ece5d4 !important; }
+/* SYSTEMIC: gradio paints its component shells from theme CSS vars — redefine
+   them inside the card so EVERY widget (textbox, audio, accordion, gallery)
+   sits on paper, instead of whack-a-mole element selectors */
+.ew-card, .ew-card * {
+  --block-background-fill: transparent;
+  --background-fill-primary: transparent;
+  --background-fill-secondary: #ece5d4;
+  --input-background-fill: #fffdf6;
+  --border-color-primary: #b9b09a;
+  --block-border-color: #b9b09a;
+  --body-text-color: var(--ink);
+  --body-text-color-subdued: #5d564a;
+  --block-label-text-color: var(--ink);
+  --block-title-text-color: var(--ink);
+  --input-placeholder-color: #9a8f7c;
+  --color-accent: var(--red);
+  --color-accent-soft: #f3d9c8;
+  --checkbox-background-color: #fffdf6;
+  --checkbox-background-color-selected: var(--red);
+  --checkbox-border-color: #b9b09a;
+  --checkbox-label-text-color: var(--ink);
+  --radio-background-color: #fffdf6;
+  --radio-border-color: #b9b09a;
+  --radio-text-color: var(--ink);
+}
+.ew-card .block, .ew-card .form, .ew-card .container, .ew-card .padded {
+  background: transparent !important; border-color: #b9b09a !important; box-shadow: none !important; }
+/* language toggle: the SELECTED option must be unmistakable — gradio paints the
+   radio's selected state from theme vars that don't reach here, so style it raw */
+.ew-card .ew-lang label { background:#fffdf6 !important; border:1.5px solid #b9b09a !important;
+  border-radius:4px !important; padding:5px 16px !important; margin-right:8px !important;
+  cursor:pointer !important; opacity:1 !important; }
+.ew-card .ew-lang label.selected { background:var(--red) !important; border-color:var(--red) !important; }
+.ew-card .ew-lang label.selected, .ew-card .ew-lang label.selected * { color:#fff !important; }
+.ew-card .ew-lang input[type="radio"] { accent-color:var(--red); }
 .ew-card textarea, .ew-card input[type="text"], .ew-card input {
   background: #fffdf6 !important; color: var(--ink) !important;
   border: 1px solid #b9b09a !important; }
 .ew-card textarea::placeholder, .ew-card input::placeholder { color: #9a8f7c !important; }
-.ew-card label span { color: var(--ink) !important; }
+.ew-card label, .ew-card label span, .ew-card .label-wrap span { color: var(--ink) !important;
+  background: transparent !important; }
+/* gradio Audio shell (mic): dark slab -> paper panel */
+.ew-card .audio-container, .ew-card .component-wrapper, .ew-card .controls,
+.ew-card .mic-wrap, .ew-card .record { background: transparent !important; }
+.ew-card button.record-button, .ew-card .record-button {
+  background: #fffdf6 !important; color: var(--ink) !important;
+  border: 1px solid #b9b09a !important; }
+.ew-card button.primary, .ew-card button[variant="primary"] {
+  background: var(--red) !important; color: #fff !important;
+  border: none !important; }
+.ew-card button.primary:hover, .ew-card button[variant="primary"]:hover {
+  background: #8a2a20 !important; }
+.ew-card button.secondary, .ew-card button[variant="secondary"] {
+  background: #ece5d4 !important; color: var(--ink) !important;
+  border: 1px solid #b9b09a !important; }
+.ew-card .accordion, .ew-card .accordion > .label-wrap, .ew-card .accordion > .label-wrap * {
+  background: transparent !important; color: var(--ink) !important;
+  border-color: #b9b09a !important; }
+.ew-card .gallery, .ew-card .gallery * {
+  background: transparent !important; }
+.ew-card .gallery .gr-image-preview, .ew-card .gallery .gr-image-preview * {
+  color: var(--ink) !important; }
 .ew-model-badge { font-family: monospace; font-size: 10.5px; letter-spacing: 1px;
-  color: #6d6354; background: #ece5d4; border: 1px dashed #b9b09a; border-radius: 4px;
+  color: #6d6354 !important; background: #ece5d4 !important; border: 1px dashed #b9b09a; border-radius: 4px;
   padding: 4px 10px; margin: 2px 0 10px; display: inline-block; }
 .ew-warn { color: var(--red) !important; font-weight: bold; font-size: 13px; }
 .ew-glimpse { position:relative; width:320px; margin:0 auto; }
@@ -234,12 +298,12 @@ CSS = """
 .ew-report th, .ew-report td { text-align:left; padding:4px 10px; border-bottom:1px solid #d8d0bd; }
 .ew-hit td { color:#1d6b2f !important; } .ew-miss td { color:var(--red) !important; } .ew-silent td { color:#8d8678 !important; }
 .ew-verdict { text-align:center; }
-.ew-stamp { display:inline-block; border:4px solid var(--red); color:var(--red); padding:6px 22px;
+.ew-stamp { display:inline-block; border:4px solid var(--red); color:var(--red) !important; padding:6px 22px;
   font-size:26px; letter-spacing:4px; transform:rotate(-6deg) scale(1); margin:6px 0 10px;
   font-family:'Special Elite','Courier New',monospace;
   animation: ew-stamp-in .28s cubic-bezier(.2,2.2,.5,1) both; }
 @keyframes ew-stamp-in { from { opacity:0; transform: rotate(-6deg) scale(2.4); } }
-.ew-good .ew-stamp { border-color:#1d6b2f; color:#1d6b2f; }
+.ew-good .ew-stamp { border-color:#1d6b2f; color:#1d6b2f !important; }
 .ew-quote { font-style:italic; margin-bottom:12px; }
 .ew-pair { display:flex; gap:18px; justify-content:center; }
 .ew-pair figure { margin:0; } .ew-pair figcaption { font-size:11px; letter-spacing:2px; text-align:center; }
@@ -284,22 +348,25 @@ with gr.Blocks(title="EYEWITNESS") as demo:
                 with gr.Column(elem_classes=["ew-card"]):
                     gr.Markdown("### Tell the sketch artist everything.\n"
                                 "*Face, hair, glasses, beard, hat, marks… anything you remember. "
-                                "English o castellano.*")
+                                "English or Spanish.*")
                     gr.HTML('<span class="ew-model-badge">🧠 NEXT: MiniCPM5-1B (fine-tuned) '
                             'translates your words into the official attribute sheet</span>')
                     if s.get("testimony_warn"):
                         gr.HTML(f'<p class="ew-warn">{s["testimony_warn"]}</p>')
                     tb = gr.Textbox(lines=4, label="Your testimony",
                                     placeholder="e.g. round face, bushy eyebrows, beanie, sunglasses, big nose, looked smug...")
-                    with gr.Row():
-                        mic = gr.Audio(sources=["microphone"], type="numpy",
-                                       label="…or SPEAK your testimony", scale=2)
-                        if HAS_ASR:
-                            gr.HTML('<span class="ew-model-badge">🎤 Cohere Transcribe 2B '
-                                    'writes down EXACTLY what you say — verbatim, like a real '
-                                    'court reporter</span>')
                     if HAS_ASR:
-                        mic.stop_recording(transcribe_testimony, [state, mic, tb], [state, tb])
+                        gr.HTML('<span class="ew-model-badge">🎤 …or SPEAK it — the transcriber '
+                                'writes down EXACTLY what you say, verbatim, like a court '
+                                'reporter</span>')
+                        lang = gr.Radio(["English", "Español"], value="English",
+                                        label="Language you'll speak", show_label=True,
+                                        interactive=True, elem_classes=["ew-lang"])
+                        mic = gr.Audio(sources=["microphone", "upload"], type="numpy",
+                                       label="Record your statement", show_label=False,
+                                       waveform_options={"show_recording_waveform": False})
+                        mic.stop_recording(transcribe_testimony, [mic, tb, lang], [tb])
+                        mic.upload(transcribe_testimony, [mic, tb, lang], [tb])
                     b = gr.Button("SEND TO SKETCH ARTIST", variant="primary")
                     b.click(submit_testimony, [state, tb], state)
 
@@ -325,12 +392,13 @@ with gr.Blocks(title="EYEWITNESS") as demo:
                                         "right: trust it blindly and you'll arrest the innocent "
                                         "wearing YOUR mistakes.*")
                             n = len(s["lineup"])
-                            rows = -(-n // 4)  # ceil
+                            cols = 2 if n <= 4 else 3  # half-width card: 4-up is tiny
+                            rows = -(-n // cols)  # ceil
                             gal = gr.Gallery(
                                 value=[(face_png(f, width=240), f"Nº {i + 1}")
                                        for i, f in enumerate(s["lineup"])],
-                                columns=4, rows=rows, height=rows * 330,
-                                allow_preview=False, label="")
+                                columns=cols, rows=rows, height=rows * 240,
+                                allow_preview=False, show_label=False, label="")
 
                             def _pick(st: dict, evt: gr.SelectData):
                                 return pick_suspect(st, evt.index)
@@ -344,15 +412,10 @@ with gr.Blocks(title="EYEWITNESS") as demo:
                 truth_img = svg_uri(render_face_svg(case.culprit, width=240))
                 picked_img = svg_uri(render_face_svg(s["lineup"][s["picked"]], width=240))
                 head = "ARREST CONFIRMED" if correct else "WRONG ARREST"
-                # personalized taunt: best-of-5 from the 1B, validated, with a
-                # deterministic personalized template as the floor — never canned
-                if HAS_MODEL:
-                    taunt = culprit_taunt(report.rows, correct, seed=case.seed)
-                else:
-                    from game.model import _template_taunt
-                    wrongs = [(l, s, t) for l, s, t, v in report.rows if v == "miss"][:3]
-                    misseds = [l for l, _s, _t, v in report.rows if v == "silent"][:3]
-                    taunt = _template_taunt(wrongs, misseds, correct, case.seed)
+                # verdict line: the culprit jokes about the CRIME + situation
+                # (live 1B when a candidate is on-crime and funny; authored floor)
+                taunt, taunt_src = culprit_taunt(case.crime_name, case.crime_blurb, correct,
+                                                 seed=case.seed, use_model=HAS_MODEL)
                 quote = f"“{taunt}”"
                 with gr.Column(elem_classes=["ew-card"]):
                     gr.HTML(f"""
@@ -369,10 +432,11 @@ with gr.Blocks(title="EYEWITNESS") as demo:
 {report_table_html(report)}""")
                     live_voice = live_speak(taunt, case.seed, case.culprit) if taunt else None
                     voice = live_voice or verdict_voice(correct)
-                    badge = ('🧠 LIVE: MiniCPM5-1B (base) wrote that line about YOUR mistakes · '
-                             '🔊 VoxCPM2 cloned the suspect\'s voice just now'
-                             if live_voice else
-                             '🧠 LIVE: MiniCPM5-1B (base) wrote that line about YOUR mistakes')
+                    wrote = ('🧠 LIVE: MiniCPM5-1B (base) improvised this taunt'
+                             if taunt_src == "model" else
+                             '✍️ taunt scripted for this case')
+                    badge = (wrote + ' · 🔊 VoxCPM2 cloned the suspect\'s voice just now'
+                             if live_voice else wrote)
                     gr.HTML(f'<span class="ew-model-badge">{badge}</span>')
                     if voice:
                         # minimal kwargs: the Space's gradio build rejects newer
@@ -396,13 +460,21 @@ with gr.Blocks(title="EYEWITNESS") as demo:
                         b.click(lambda: new_session(), None, state)
 
 
+def _preload_models():
+    """Warm all models BEFORE the server accepts requests, so no user action
+    pays the load (no hung first mic/parse). Synchronous on purpose: loading
+    VoxCPM/torch with their BLAS threads while another thread prints to stdout
+    segfaults the process (BufferedWriter race) — keep it on the main thread."""
+    try:
+        from game import model as _m, voice as _v, asr as _a
+        _m.preload()
+        _v.preload()
+        _a.preload()  # so the first spoken testimony doesn't eat the 2B load
+        print("[startup] models preloaded", flush=True)
+    except Exception as e:
+        print(f"[startup] preload failed (cascade covers it): {e}", flush=True)
+
+
 if __name__ == "__main__":
-    if os.environ.get("SPACES_ZERO_GPU"):  # pay model loads at startup, not per user
-        try:
-            from game import model as _m, voice as _v
-            _m.preload()
-            _v.preload()
-            print("[startup] models preloaded on CPU", flush=True)
-        except Exception as e:
-            print(f"[startup] preload failed (cascade covers it): {e}", flush=True)
+    _preload_models()  # ~30s once; then UI + every request is instant and stable
     demo.launch(css=CSS)

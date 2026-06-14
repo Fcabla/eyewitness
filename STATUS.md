@@ -29,8 +29,9 @@ Latencia percibida: aceptable (palabra de Fernando). GitHub/dataset/model public
   badges por pantalla ("MiniCPM5-1B parseando tu testimonio…"), el cuaderno del retratista
   (mapeo palabra→atributo visible), retrato construyéndose rasgo a rasgo.
 - **F5 · Testimonio HABLADO** (idea Fernando): ASR para hablar en vez de escribir.
-  Opciones: **Cohere Transcribe 2B** (sponsor, verbatim, ES+EN — la opción natural; sube runtime
-  a ~5.7B, sigue ≤32B sobrado), o Whisper small. Encaja con la fantasía de testigo declarando.
+  Decisión (12 jun): **Cohere Transcribe 2B en exclusiva** (sponsor award; sube runtime
+  a ~5.7B, sigue ≤32B sobrado). Sin fallback whisper — no puntúa para ningún premio.
+  Idioma del testigo (EN/ES) elegido por log-prob entre ambos decoder prompts.
 - **F6 · Imagen realista del sospechoso** (idea Fernando): generar una "foto policial" realista
   desde el retrato/atributos, al final o en el loop. Opciones: img2img/ControlNet sobre el SVG,
   SDXL-Turbo (~3.5B) o FLUX (12B, rompe presupuesto Tiny Titan si computa runtime). Pesada:
